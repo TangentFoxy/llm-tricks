@@ -18,11 +18,8 @@ tree = function(path, fn)
   end)
 end
 
+local file_list = {}
 local embeddings = {}
-
-local files_processed = 0
--- TODO estimate files by doing tree without processing, then process the files after
-local total_file_count = 2201
 
 tree(PATH, function(file_name)
   local path, name, extension = utility.split_path_components(file_name)
@@ -31,16 +28,24 @@ tree(PATH, function(file_name)
   end
 
   if not whitelist[extension] then
-    files_processed = files_processed + 1
     return
   end
+
+  file_list[#file_list + 1] = file_name
+end)
+
+for i = 1, #file_list do
+  local file_name = file_list[i]
 
   local file_contents = utility.open(file_name, "r", function(file)
     return file:read("*all")
   end)
 
   local embedding_model = "nomic-embed-text"
-  local output = utility.capture_safe("ollama run " .. embedding_model .. " " .. file_contents:enquote())
+  -- local output = utility.capture_safe("ollama run " .. embedding_model .. " " .. file_contents:enquote())
+  -- local output = utility.capture_safe("ollama run " .. embedding_model .. " \"\"\"" .. file_contents .. "\"\"\"")
+  -- local output = utility.capture_safe("echo \"" .. file_contents:enquote() .. "\" | ollama run " .. embedding_model)
+  local output = utility.capture_safe("ollama run " .. embedding_model .. " \"" .. file_contents:enquote() .. "\"")
   output = output:sub(1, -2) -- strip extra newline from utility.capture_safe
 
   output = setmetatable({ vector = output }, {
@@ -51,12 +56,11 @@ tree(PATH, function(file_name)
 
   embeddings[file_name] = { vector = output }
 
-  files_processed = files_processed + 1
-  print("(estimate) Finished " .. files_processed .. "/" .. total_file_count .. " (" .. math.floor(files_processed/total_file_count * 100) .. "%)")
-end)
+  print("Finished " .. i .. "/" .. #file_list .. " (" .. math.floor(i / #file_list * 100) .. "%)")
+end
 
 local file = utility.open("dump.txt", "w", function(file)
-  local final_output = json.encode(final_output, { indent = true })
-  file:write(final_output)
+  local output = json.encode(embeddings, { indent = true })
+  file:write(output)
   file:write("\n")
 end)
