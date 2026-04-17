@@ -17,24 +17,6 @@ end
 
 
 
-local tree
-tree = function(path, fn)
-  utility.list(path or ".", function(path_name)
-    if utility.is_file(path_name) then
-      fn(path_name)
-    else
-      tree(path .. utility.path_separator .. path_name, fn)
-    end
-  end)
-end
-
-tree(".", function(path_name)
-  print(path_name)
-end)
-os.exit()
-
-
-
 local prompt = [[Return JSON: category, tags (array), summary (short)]]
 -- local prompt = [[Return YAML: category, tags (array), summary (short)]]
 
@@ -50,28 +32,31 @@ prompt = prompt .. file_contents
 local model = "gemma3:4b"
 -- local output = utility.capture_safe("ollama run " .. model .. " --nowordwrap " .. prompt:enquote())
 
-local embedding_model = "nomic-embed-text"
-local output = utility.capture_safe("ollama run " .. embedding_model .. " " .. file_contents:enquote())
+-- local embedding_model = "nomic-embed-text"
+-- local output = utility.capture_safe("ollama run " .. embedding_model .. " " .. file_contents:enquote())
 
-output = output:sub(1, -2) -- strip extra newline from utility.capture_safe
+-- output = output:sub(1, -2) -- strip extra newline from utility.capture_safe
 
-print(output)
-
--- print(strip_markdown(output))
-
-local embedding_metatable = {
-  __tojson = function(self, state)
-    return self.vector
+-- strip YAML frontmatter (if present)
+--   can error, will return nil & error message
+local function strip_frontmatter(text)
+  local tab = text:split("\n")
+  if tab[1] == "---" then
+    table.remove(tab, 1)
+    while true do
+      local done = tab[1] == "---"
+      table.remove(tab, 1)
+      if done then
+        return table.concat(tab, "\n")
+      elseif #tab < 1 then
+        return nil, "Invalid YAML frontmatter."
+      end
+    end
   end
-}
+  return text
+end
 
-local output = {
-  file_name = file_name,
-  vector = setmetatable({ vector = output }, embedding_metatable),
-}
+-- print(output)
 
-print(json.encode(output, { indent = true }))
-
--- local file = utility.open("dump.txt", "w", function(file)
---   file:write(output)
--- end)
+print(strip_frontmatter(file_contents))
+-- print(strip_markdown(output))

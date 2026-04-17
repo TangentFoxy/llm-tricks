@@ -7,6 +7,25 @@ local json = utility.require("dkjson")
 local PATH = "notebook"
 local whitelist = { md = true, }
 
+-- strip YAML frontmatter (if present)
+--   can error, will return nil & error message
+local function strip_frontmatter(text)
+  local tab = text:split("\n")
+  if tab[1] == "---" then
+    table.remove(tab, 1)
+    while true do
+      local done = tab[1] == "---"
+      table.remove(tab, 1)
+      if done then
+        return table.concat(tab, "\n")
+      elseif #tab < 1 then
+        return nil, "Invalid YAML frontmatter."
+      end
+    end
+  end
+  return text
+end
+
 local tree
 tree = function(path, fn)
   utility.list(path or ".", function(path_name)
@@ -17,6 +36,8 @@ tree = function(path, fn)
     end
   end)
 end
+
+
 
 local file_list = {}
 local embeddings = {}
@@ -37,13 +58,25 @@ end)
 for i = 1, #file_list do
   local file_name = file_list[i]
 
-  -- TODO read and output to temp file, skipping YAML
-  -- local file_contents = utility.open(file_name, "r", function(file)
-  --   return file:read("*all")
-  -- end)
+  -- stripping YAML frontmatter before generating embeddings
+  local file_contents = utility.open(file_name, "r", function(file)
+    return file:read("*all")
+  end)
+
+  local tmp_file_contents, error_message = strip_frontmatter(file_contents)
+  if tmp_file_contents == nil then
+    print("ERROR: " .. file_name .. " " .. error_message)
+    tmp_file_contents = file_contents
+  end
+
+  local tmp_file_name = utility.tmp_file_name()
+  utility.open(tmp_file_name, "w", function(file)
+    file:write(tmp_file_contents)
+  end)
 
   local embedding_model = "nomic-embed-text"
-  local output = utility.capture_safe("cat " .. file_name:enquote() .. " | ollama run " .. embedding_model)
+  local output = utility.capture_safe("cat " .. tmp_file_name:enquote() .. " | ollama run " .. embedding_model)
+  os.execute("rm " .. tmp_file_name)
   output = output:sub(1, -2) -- strip extra newline from utility.capture_safe
 
   output = setmetatable({ vector = output }, {
@@ -57,7 +90,7 @@ for i = 1, #file_list do
   print("Finished " .. i .. "/" .. #file_list .. " (" .. math.floor(i / #file_list * 100) .. "%)")
 end
 
-local file = utility.open("dump.txt", "w", function(file)
+utility.open("embeddings.json", "w", function(file)
   local output = json.encode(embeddings, { indent = true })
   file:write(output)
   file:write("\n")
