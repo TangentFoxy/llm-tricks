@@ -4,7 +4,7 @@ package.path = (arg[0]:match("@?(.*/)") or arg[0]:match("@?(.*\\)")) .. "lib" ..
 local utility = require "utility"
 local json = utility.require("dkjson")
 
-local PATH = "vault-snapshot"
+local PATH = "notebook"
 local whitelist = { md = true, }
 
 local tree
@@ -37,15 +37,13 @@ end)
 for i = 1, #file_list do
   local file_name = file_list[i]
 
-  local file_contents = utility.open(file_name, "r", function(file)
-    return file:read("*all")
-  end)
+  -- TODO read and output to temp file, skipping YAML
+  -- local file_contents = utility.open(file_name, "r", function(file)
+  --   return file:read("*all")
+  -- end)
 
   local embedding_model = "nomic-embed-text"
-  -- local output = utility.capture_safe("ollama run " .. embedding_model .. " " .. file_contents:enquote())
-  -- local output = utility.capture_safe("ollama run " .. embedding_model .. " \"\"\"" .. file_contents .. "\"\"\"")
-  -- local output = utility.capture_safe("echo \"" .. file_contents:enquote() .. "\" | ollama run " .. embedding_model)
-  local output = utility.capture_safe("ollama run " .. embedding_model .. " \"" .. file_contents:enquote() .. "\"")
+  local output = utility.capture_safe("cat " .. file_name:enquote() .. " | ollama run " .. embedding_model)
   output = output:sub(1, -2) -- strip extra newline from utility.capture_safe
 
   output = setmetatable({ vector = output }, {
