@@ -7,6 +7,9 @@ local json = utility.require("dkjson")
 local PATH = "notebook"
 local whitelist = { md = true, }
 
+local embedding_model = "nomic-embed-text"
+local maximum_file_size = 2048
+
 -- strip YAML frontmatter (if present)
 --   can error, will return nil & error message
 local function strip_frontmatter(text)
@@ -37,6 +40,10 @@ tree = function(path, fn)
   end)
 end
 
+local function leftpad(text, length)
+  return string.rep("0", length - #(tostring(text))) .. text
+end
+
 
 
 local file_list = {}
@@ -56,38 +63,56 @@ tree(PATH, function(file_name)
 end)
 
 for i = 1, #file_list do
-  local file_name = file_list[i]
+  local function _run()
+    local file_name = file_list[i]
 
-  -- stripping YAML frontmatter before generating embeddings
-  local file_contents = utility.open(file_name, "r", function(file)
-    return file:read("*all")
-  end)
+    -- stripping YAML frontmatter before generating embeddings
+    local file_contents = utility.open(file_name, "r", function(file)
+      return file:read("*all")
+    end)
 
-  local tmp_file_contents, error_message = strip_frontmatter(file_contents)
-  if tmp_file_contents == nil then
-    print("ERROR: " .. file_name .. " " .. error_message)
-    tmp_file_contents = file_contents
+    local tmp_file_contents, error_message = strip_frontmatter(file_contents)
+    if tmp_file_contents == nil then
+      print("ERROR: " .. file_name .. " " .. error_message)
+      tmp_file_contents = file_contents
+    end
+
+    if #tmp_file_contents == 0 then
+      print(file_name .. "\n is empty and will be skipped.")
+      return
+    end
+
+    if #tmp_file_contents > maximum_file_size then
+      print(file_name .. "\n is too long. Only the first " .. maximum_file_size .. " bytes will be scanned.")
+      tmp_file_contents = tmp_file_contents:sub(1, maximum_file_size)
+    end
+
+    local tmp_file_name = utility.tmp_file_name()
+    utility.open(tmp_file_name, "w", function(file)
+      file:write(tmp_file_contents)
+    end)
+
+    local output = utility.capture_safe("cat " .. tmp_file_name:enquote() .. " | ollama run " .. embedding_model)
+    os.execute("rm " .. tmp_file_name)
+    output = output:sub(1, -2) -- strip extra newline from utility.capture_safe
+
+    if #output == 0 then
+      print("Warning: " .. file_name .. " did not have embeddings generated.")
+      return
+    end
+
+    output = setmetatable({ vector = output }, {
+      __tojson = function(self, state)
+        return self.vector
+      end
+    })
+
+    embeddings[file_name] = { vector = output }
+
+    print("Finished " .. leftpad(i, #tostring(#file_list)) .. "/" .. #file_list .. " (" .. leftpad(math.floor(i / #file_list * 100), 3) .. "%)")
   end
 
-  local tmp_file_name = utility.tmp_file_name()
-  utility.open(tmp_file_name, "w", function(file)
-    file:write(tmp_file_contents)
-  end)
-
-  local embedding_model = "nomic-embed-text"
-  local output = utility.capture_safe("cat " .. tmp_file_name:enquote() .. " | ollama run " .. embedding_model)
-  os.execute("rm " .. tmp_file_name)
-  output = output:sub(1, -2) -- strip extra newline from utility.capture_safe
-
-  output = setmetatable({ vector = output }, {
-    __tojson = function(self, state)
-      return self.vector
-    end
-  })
-
-  embeddings[file_name] = { vector = output }
-
-  print("Finished " .. i .. "/" .. #file_list .. " (" .. math.floor(i / #file_list * 100) .. "%)")
+  _run()
 end
 
 utility.open("embeddings.json", "w", function(file)
