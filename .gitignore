@@ -1,2 +1,3 @@
 .DS_Store
-notebook/**
+PRIVATE_DATA/**
+!PRIVATE_DATA/.gitkeep
