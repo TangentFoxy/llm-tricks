@@ -8,6 +8,47 @@ local default_model = "gemma4:12b-mlx"
 local minimum_bytes = 1000
 local maximum_bytes = 40000
 
+local synopsis_prompt = [[
+Generate a lengthy novel synopsis from the following:
+]]
+
+local scoring_prompt = [[
+You are evaluating novel synopses for development priority. The goal is NOT to judge writing quality, grammar, or polish. The synopsis is only a rough idea. Assign an integer score from 1–100 for each category. Be extremely harsh with your scoring.
+
+1. Hook
+2. Originality
+3. Memorability
+4. Expansion Potential
+5. Conflict Potential
+6. Character Potential
+7. Worldbuilding Potential
+8. Emotional Potential
+9. Curiosity
+10. Overall Promise
+
+Guidelines:
+- Avoid clustering scores near the middle. Use the full 1–100 range.
+- A score around 50 represents an average publishable premise.
+- Scores above 85 should be rare and reserved for genuinely exceptional ideas.
+- Scores below 25 should represent ideas with major conceptual weaknesses.
+- Return only valid JSON.
+
+Output format:
+
+{
+  "hook": 0,
+  "originality": 0,
+  "memorability": 0,
+  "expansion_potential": 0,
+  "conflict_potential": 0,
+  "character_potential": 0,
+  "worldbuilding_potential": 0,
+  "emotional_potential": 0,
+  "curiosity": 0,
+  "overall_promise": 0
+}
+]]
+
 local read_all = function(file_name)
   return utility.open(file_name, "r", function(file)
     return file:read("*all")
@@ -128,6 +169,23 @@ local refresh_file_list = function()
   write_all("PRIVATE_DATA/file_list.json", json.encode(new_files_list, { indent = true }))
 end
 
+local generate_and_score = function(file_name, text)
+  print("Writing synopsis...")
+  local synopsis = send_prompt(synopsis_prompt .. text)
+  print(synopsis)
+  print("Scoring synopsis...")
+  local scoring = send_prompt(scoring_prompt .. synopsis)
+  print(scoring)
+  local scoring_decoded = json.decode(scoring)
+
+  local object = {
+    synopsis = synopsis,
+    scoring = scoring_decoded or scoring, -- either the correct values or a string of output that isn't JSON
+  }
+
+  write_all("PRIVATE_DATA/synopses/" .. utility.uuid(), json.encode(object, { indent = true }))
+end
+
 
 
 if arg[1] == "refresh_file_list" then
@@ -141,6 +199,7 @@ if #files == 0 then
   os.exit(1)
 end
 
+os.execute("mkdir -p PRIVATE_DATA/synopses")
 while true do
   print("Selecting a file...")
   local file_name = files[math.random(1, #files)]
@@ -150,7 +209,8 @@ while true do
     text = strip_frontmatter(text)
     if #text > minimum_bytes and #text <= maximum_bytes then
       print(file_name .. " chosen.")
-      os.exit(0)
+      generate_and_score(file_name, text) -- kind of the main function, innit?
+      -- os.exit(0)
     end
   end
 end
