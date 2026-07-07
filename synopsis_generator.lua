@@ -20,6 +20,13 @@ local write_all = function(file_name, text)
   end)
 end
 
+local files
+if utility.path_exists("PRIVATE_DATA/file_list.json") then
+  files = json.decode(read_all("PRIVATE_DATA/file_list.json"))
+else
+  files = {}
+end
+
 -- strip YAML frontmatter (if present)
 --   can error, will return nil & error message
 local function strip_frontmatter(text)
@@ -105,25 +112,45 @@ local get_file_size = function(file_name)
   end
 end
 
-local files = {}
+local refresh_file_list = function()
+  local blacklist = { -- I'm only blacklisting binary formats because funny results happen with really invalid texts
+    "jpg", "mp4", "pdf", "png", "webp", "jpeg", "gif",
+  } for _, name in ipairs(blacklist) do blacklist[name] = true end
 
-tree("PRIVATE_DATA/notebook", function(file_name)
-  -- local file_size = get_file_size(file_name)
-  -- if file_size > 0 and file_size <= maximum_bytes then
-  --   files[#files + 1] = file_name
-  -- end
-  files[#files + 1] = file_name
-end)
+  local new_files_list = {}
+  tree("PRIVATE_DATA/notebook", function(file_name)
+    local _, _, extension = utility.split_path_components(file_name)
+    if not blacklist[extension] then
+      new_files_list[#new_files_list + 1] = file_name
+    end
+  end)
+  files = new_files_list
+  write_all("PRIVATE_DATA/file_list.json", json.encode(new_files_list, { indent = true }))
+end
+
+
+
+if arg[1] == "refresh_file_list" then
+  print("Refresing file list...")
+  refresh_file_list()
+end
 
 print(#files .. " files to select from.")
--- print(files[math.random(1, #files)] .. " chosen.")
+if #files == 0 then
+  print("Run \"./synopsis_generator.lua refresh_file_list\" first.")
+  os.exit(1)
+end
 
 while true do
   print("Selecting a file...")
   local file_name = files[math.random(1, #files)]
   local file_size = get_file_size(file_name)
-  if file_size > 0 and file_size <= maximum_bytes then
-    print(file_name .. " chosen.")
-    os.exit(0)
+  if file_size > minimum_bytes and file_size <= maximum_bytes then
+    local text = read_all(file_name)
+    text = strip_frontmatter(text)
+    if #text > minimum_bytes and #text <= maximum_bytes then
+      print(file_name .. " chosen.")
+      os.exit(0)
+    end
   end
 end
