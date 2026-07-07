@@ -183,7 +183,7 @@ local generate_and_score = function(file_name, text)
     scoring = scoring_decoded or scoring, -- either the correct values or a string of output that isn't JSON
   }
 
-  write_all("PRIVATE_DATA/synopses/" .. utility.uuid(), json.encode(object, { indent = true }))
+  write_all("PRIVATE_DATA/synopses/" .. utility.uuid() .. ".json", json.encode(object, { indent = true }))
 end
 
 
