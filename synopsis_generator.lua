@@ -87,6 +87,19 @@ local function strip_frontmatter(text)
   return text
 end
 
+-- strip Markdown formatting of a JSON block
+--  just returns the string if it doesn't match
+local function strip_markdown_codeblock(text)
+  local tab = text:split("\n")
+  if tab[1] == "```json" then
+    table.remove(tab, 1)
+    table.remove(tab, #tab)
+    return table.concat(tab, "\n")
+  else
+    return text
+  end
+end
+
 local strip_reasoning = function(text, reasoning_lines)
   if not reasoning_lines then reasoning_lines = {} end
   local tab = text:split("\n")
@@ -121,9 +134,10 @@ local send_prompt = function(text, model)
   if not output then error("ollama failed to generate output") end
   output = output:sub(1, -2) -- strip extra newline from utility.capture_safe
 
-  output = strip_reasoning(output)
+  local thinking = {}
+  output = strip_reasoning(output, thinking)
 
-  return output
+  return output, thinking
 end
 
 local tree
@@ -174,13 +188,17 @@ local generate_and_score = function(file_name, text)
   local synopsis = send_prompt(synopsis_prompt .. text)
   print(synopsis)
   print("Scoring synopsis...")
-  local scoring = send_prompt(scoring_prompt .. synopsis)
+  local scoring, thinking = send_prompt(scoring_prompt .. synopsis)
   print(scoring)
-  local scoring_decoded = json.decode(scoring)
+  local scoring_decoded = json.decode(scoring) -- likely will not work because it consistently returns Markdown instead of JSON
+  if not scoring_decoded then
+    scoring_decoded = json.decode(strip_markdown_codeblock(scoring))
+  end
 
   local object = {
     synopsis = synopsis,
     scoring = scoring_decoded or scoring, -- either the correct values or a string of output that isn't JSON
+    thinking = thinking,
   }
 
   write_all("PRIVATE_DATA/synopses/" .. utility.uuid() .. ".json", json.encode(object, { indent = true }))
@@ -191,6 +209,19 @@ end
 if arg[1] == "refresh_file_list" then
   print("Refresing file list...")
   refresh_file_list()
+end
+
+if arg[1] == "repair_synopsis_exports" then
+  utility.list("PRIVATE_DATA/synopses", function(path_name)
+    if path_name:find("%.json") then
+      local object = json.decode(read_all(path_name))
+      local decoded = json.decode(strip_markdown_codeblock(object.scoring))
+      if decoded then
+        object.scoring = decoded
+        write_all(path_name, json.encode(object, { indent = true, }))
+      end
+    end
+  end)
 end
 
 print(#files .. " files to select from.")
