@@ -250,7 +250,7 @@ if arg[1] == "export_ordered_list_of_prompts" then
   -- for k,v in pairs(item_order) do print(v.path_name,v.total_score) end
   local output = {
     "---",
-    "title: Ordered Synopses",
+    "title: Ordered Synopses (" .. #item_order .. " items)",
     "author: [\"Gemma4:12b-mlx\", \"Tangent\", \"Ollama\"]",
     "publisher: Tangent",
     "---",
@@ -270,6 +270,7 @@ if arg[1] == "export_ordered_list_of_prompts" then
     output[#output + 1] = "## Scoring\n\n```json\n" .. json.encode(item.scoring, { indent = true, }) .. "\n```\n"
   end
   write_all("PRIVATE_DATA/Ordered Synopses.md", table.concat(output, "\n"))
+  os.execute("pandoc \"PRIVATE_DATA/Ordered Synopses.md\" -o \"PRIVATE_DATA/Ordered Synopses.epub\"")
   os.exit(0)
 end
 
