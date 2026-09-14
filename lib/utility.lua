@@ -32,13 +32,56 @@ else
   }
 end
 
-utility.version = "1.4.0"
+utility.version = "1.6.0"
 -- WARNING: This will return "./" if the original script is called locally instead of with an absolute path!
 if arg[0] ~= nil then
   utility.path = (arg[0]:match("@?(.*/)") or arg[0]:match("@?(.*\\)")) -- inspired by discussion in https://stackoverflow.com/q/6380820
 else
   utility.path = "./"
 end
+
+
+
+local function standard_library_addition(tab, name, func)
+  if tab[name] then
+    print("WARNING: " .. tab .. "." .. name .. " was defined by another library. lua-utility may encounter errors due to a differing implementation.")
+  else
+    tab[name] = func
+  end
+end
+
+
+
+-- trim6 from Lua users wiki (best all-round pure Lua performance)
+standard_library_addition(string, "trim", function(s)
+  return s:match'^()%s*$' and '' or s:match'^%s*(.*%S)'
+end)
+
+standard_library_addition(string, "enquote", function(s)
+  return "\"" .. s:gsub("\"", "\\\"") .. "\""
+end)
+
+standard_library_addition(string, "gsplit", function(s, delimiter)
+  local function escape_special_characters(s)
+    local special_characters = "[()%%.[^$%]*+%-?]"
+    if s == nil then return end
+    return (s:gsub(special_characters, "%%%1"))
+  end
+
+  delimiter = delimiter or ","
+  if s:sub(-#delimiter) ~= delimiter then s = s .. delimiter end
+  return s:gmatch("(.-)" .. escape_special_characters(delimiter))
+end)
+
+standard_library_addition(string, "split", function(s, delimiter)
+  local result = {}
+  for item in s:gsplit(delimiter) do
+    result[#result + 1] = item
+  end
+  return result
+end)
+
+
 
 utility.require = function(...)
   -- if libraries adjacent to this one aren't already loadable, make sure they are!
@@ -102,47 +145,6 @@ utility.capture_unsafe = function(command)
     return utility.capture_safe(command)
   end
 end
-
-
-
-local function standard_library_addition(tab, name, func)
-  if tab[name] then
-    print("WARNING: " .. tab .. "." .. name .. " was defined by another library. lua-utility may encounter errors due to a differing implementation.")
-  else
-    tab[name] = func
-  end
-end
-
-
-
--- trim6 from Lua users wiki (best all-round pure Lua performance)
-standard_library_addition(string, "trim", function(s)
-  return s:match'^()%s*$' and '' or s:match'^%s*(.*%S)'
-end)
-
-standard_library_addition(string, "enquote", function(s)
-  return "\"" .. s:gsub("\"", "\\\"") .. "\""
-end)
-
-standard_library_addition(string, "split", function(s, delimiter)
-  local result = {}
-  for item in s:gsplit(delimiter) do
-    result[#result + 1] = item
-  end
-  return result
-end)
-
-standard_library_addition(string, "gsplit", function(s, delimiter)
-  local function escape_special_characters(s)
-    local special_characters = "[()%%.[^$%]*+%-?]"
-    if s == nil then return end
-    return (s:gsub(special_characters, "%%%1"))
-  end
-
-  delimiter = delimiter or ","
-  if s:sub(-#delimiter) ~= delimiter then s = s .. delimiter end
-  return s:gmatch("(.-)" .. escape_special_characters(delimiter))
-end)
 
 
 
@@ -301,7 +303,7 @@ utility.release_lock = function(file_path, lock_uuid)
   local lock_file_path = file_path .. ".lock"
   if lock_uuid then
     utility.open(lock_file_path, "r", function(file)
-      if not file:read("*all") == lock_uuid then
+      if not (file:read("*all") == lock_uuid) then
         error("\n\n Lock UUID changed while lock was obtained. Data loss may have occurred. \n\n")
       end
     end)
@@ -350,10 +352,47 @@ end
 
 
 
+local data_file_locations = {}
+utility.load_data = function(file_path)
+  local data = utility.open(file_path, "r", function(data_file)
+    local json = utility.require("dkjson")
+    return json.decode(data_file:read("*all"))
+  end)
+  data_file_locations[data] = file_path
+  return data
+end
+
+utility.save_data = function(data, file_path)
+  local keys, loop = {}
+  loop = function(tab)
+    if type(tab) == "table" then
+      for k,v in pairs(tab) do
+        if not (type(k) == "number") then
+          keys[k] = true
+        end
+        loop(v)
+      end
+    end
+  end
+  loop(data)
+  local order = {}
+  for k in pairs(keys) do order[#order + 1] = k end
+  table.sort(order)
+
+  file_path = file_path or data_file_locations[data]
+  assert(file_path, "The object must have been loaded by utility.load_data or you must pass a path as the second argument.")
+  utility.open(file_path, "w", function(data_file)
+    local json = utility.require("dkjson")
+    data_file:write(json.encode(data, { indent = true, keyorder = order, }))
+    data_file:write("\n")
+  end)
+end
+
+
+
 utility.deepcopy = function(tab)
-  local _type = type(tab)
   local copy
-  if _type == "table" then
+  if type(tab) == "table" then
     copy = {}
     for key, value in next, tab, nil do
       copy[utility.deepcopy(key)] = utility.deepcopy(value)
@@ -422,5 +461,54 @@ utility.curl_read = function(download_url, curl_options)
   end)
   return file_contents
 end
+
+
+
+utility.llm_prompt = function(text, model, stabilize)
+  utility.required_program("ollama")
+
+  -- if stabilize == nil then stabilize = true end -- I may switch this back to defaulting on
+  if type(text) == "table" then text = table.concat(text, "\n") end
+
+  local config = utility.get_config("read-only")
+  model = model or (config.ollama and config.ollama.default_model) or "gemma4:12b-mlx"
+
+  local tmp_file_name = utility.tmp_file_name()
+  utility.open(tmp_file_name, "w", function(file)
+    file:write(text)
+  end)
+
+  -- word wrap fucks up usability of output in other things badly
+  local output = utility.capture_safe("cat " .. tmp_file_name:enquote() .. " | ollama run " .. model .. " --nowordwrap")
+  -- in previous testing, this improved system stability at the cost of speed by ensuring memory was not overtaxed by repeated calls to an LLM
+  if stabilize then os.execute("ollama stop " .. model) end
+
+  os.execute("rm " .. tmp_file_name)
+  assert(output, "ollama failed to generate output")
+
+  local strip_reasoning = function(text)
+    local reasoning_lines = {}
+    local tab = text:split("\n")
+    table.remove(tab, 1) -- remove "Thinking..."
+
+    while true do
+      local done = tab[1] == "...done thinking."
+      local line = table.remove(tab, 1)
+      if done then
+        table.remove(tab, 1) -- remove blank line after reasoning
+        return table.concat(tab, "\n"), table.concat(reasoning_lines, "\n")
+      elseif #tab < 1 then
+        return text -- can only be reached if theere was no reasoning output
+      else
+        reasoning_lines[#reasoning_lines + 1] = line
+      end
+    end
+  end
+
+  output = output:sub(1, -2) -- strip extra newline from utility.capture_safe
+  return strip_reasoning(output) -- this returns the text AND reasoning
+end
+
+
 
 return utility
