@@ -1,3 +1,4 @@
 .DS_Store
 PRIVATE_DATA/**
 !PRIVATE_DATA/.gitkeep
+config.json
