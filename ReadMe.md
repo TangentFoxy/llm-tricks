@@ -16,3 +16,13 @@ them.
 ###### `least_similar.lua`
 Opens `similarities.json`, reverses the sort order, and saves it as
 `differences.json`.
+
+###### `synopsis_generator.lua`
+Chooses a random file within `notebook`, and generates a novel synopsis from it.
+
+Arguments:
+- `refresh_file_list`: Refreshes the cached file list to choose from.
+- `export_ordered_list_of_prompts`: Makes an epub to review generated synopses.
+
+## Tasks
+- [ ] synopsis_generator cache should include file sizes to make script running easier/faster
