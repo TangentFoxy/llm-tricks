@@ -41,6 +41,8 @@ is only run the first time (optional), while `refresh_command` is run each time
 (optional). Commands will be run in the specified `path`. `strip_frontmatter` is
 for removing YAML frontmatter (common in Markdown files) if truthy.
 
+Filters are optional.
+
 ### `synopsis_generator.lua`
 Chooses a random file within `notebook`, and generates a novel synopsis from it.
 
