@@ -25,5 +25,5 @@ Arguments:
 - `export_ordered_list_of_prompts`: Makes an epub to review generated synopses.
 
 ## Tasks
-- [ ] synopsis_generator cache should include file sizes to make script running easier/faster
 - [ ] The whitelisting/blacklisting of tree should be in list too.
+- [ ] synopsis_generator should be able to blacklist files it already tried?

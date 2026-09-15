@@ -11,26 +11,33 @@ local model = "gemma4:12b-mlx"
 local minimum_bytes = 1000
 local maximum_bytes = 40000
 
-local files
-if utility.path_exists("PRIVATE_DATA/file_list.json") then
-  files = utility.load_data("PRIVATE_DATA/file_list.json")
+local data_location = "PRIVATE_DATA/synopsis_generator_file_list.json"
+local file_list
+if utility.path_exists(data_location) then
+  file_list = utility.load_data(data_location)
 else
-  files = {}
+  file_list = {}
 end
 
 local refresh_file_list = function()
+  os.execute("cd PRIVATE_DATA/notebook && git pull origin")
+
   local new_files_list = {}
   utility.tree("PRIVATE_DATA/notebook", {
     blacklist = utility.enumerate{ ".git", ".gitattributes", ".gitignore", ".gitkeep", ".DS_Store", },
     extension_blacklist = utility.enumerate{ "gif", "jpg", "jpeg", "mp4", "pdf", "png", "webp", },
   }, function(file_name)
     local file_size = utility.file_size(file_name)
-    if file_size > minimum_bytes and file_size <= maximum_bytes then
-      new_files_list[#new_files_list + 1] = file_name
+    if file_size >= minimum_bytes and file_size <= maximum_bytes then
+      local text = text_processing.strip_frontmatter(utility.read_file(file_name))
+      if #text >= minimum_bytes and #text <= maximum_bytes then
+        new_files_list[#new_files_list + 1] = file_name
+      end
     end
   end)
-  files = new_files_list
-  utility.save_data(new_files_list, "PRIVATE_DATA/file_list.json")
+
+  file_list = new_files_list
+  utility.save_data(new_files_list, data_location)
 end
 
 local generate_and_score = function(file_name, text)
@@ -114,23 +121,15 @@ elseif arg[1] == "export_ordered_list_of_prompts" then
   os.exit(0)
 end
 
-print(#files .. " files to select from.")
-if #files == 0 then
+print(#file_list .. " files to select from.")
+if #file_list == 0 then
   print("Run \"./synopsis_generator.lua refresh_file_list\" first.")
   os.exit(1)
 end
 
 while true do
-  print("Selecting a file...")
-  local file_name = files[math.random(1, #files)]
-  local file_size = utility.file_size(file_name)
-  if file_size > minimum_bytes and file_size <= maximum_bytes then
-    local text = utility.read_file(file_name)
-    text = text_processing.strip_frontmatter(text)
-    if #text > minimum_bytes and #text <= maximum_bytes then
-      print(file_name .. " chosen.")
-      generate_and_score(file_name, text) -- kind of the main function, innit?
-      -- os.exit(0)
-    end
-  end
+  local file_name = file_list[math.random(1, #file_list)]
+  local text = utility.read_file(file_name)
+  print(file_name .. " chosen.")
+  generate_and_score(file_name, text)
 end
