@@ -2,68 +2,17 @@
 
 package.path = (arg[0]:match("@?(.*/)") or arg[0]:match("@?(.*\\)")) .. "lib" .. package.config:sub(1, 1) .. "?.lua;" .. package.path
 local utility = require "utility"
+
 local json = utility.require("dkjson")
+local prompts = utility.require("prompts")
 
 local default_model = "gemma4:12b-mlx"
 local minimum_bytes = 1000
 local maximum_bytes = 40000
 
-local synopsis_prompt = [[
-Generate a lengthy novel synopsis from the following:
-]]
-
-local scoring_prompt = [[
-You are evaluating novel synopses for development priority. The goal is NOT to judge writing quality, grammar, or polish. The synopsis is only a rough idea. Assign an integer score from 1–100 for each category. Be extremely harsh with your scoring.
-
-1. Hook
-2. Originality
-3. Memorability
-4. Expansion Potential
-5. Conflict Potential
-6. Character Potential
-7. Worldbuilding Potential
-8. Emotional Potential
-9. Curiosity
-10. Overall Promise
-
-Guidelines:
-- Avoid clustering scores near the middle. Use the full 1–100 range.
-- A score around 50 represents an average publishable premise.
-- Scores above 85 should be rare and reserved for genuinely exceptional ideas.
-- Scores below 25 should represent ideas with major conceptual weaknesses.
-- Return only valid JSON.
-
-Output format:
-
-{
-  "hook": 0,
-  "originality": 0,
-  "memorability": 0,
-  "expansion_potential": 0,
-  "conflict_potential": 0,
-  "character_potential": 0,
-  "worldbuilding_potential": 0,
-  "emotional_potential": 0,
-  "curiosity": 0,
-  "overall_promise": 0
-}
-]]
-
-local read_all = function(file_name)
-  return utility.open(file_name, "r", function(file)
-    return file:read("*all")
-  end)
-end
-local write_all = function(file_name, text)
-  return utility.open(file_name, "w", function(file)
-    file:write(text)
-    file:write("\n")
-  end)
-end
-
 local files
 if utility.path_exists("PRIVATE_DATA/file_list.json") then
-  files = json.decode(read_all("PRIVATE_DATA/file_list.json"))
+  files = utility.load_data("PRIVATE_DATA/file_list.json")
 else
   files = {}
 end
@@ -140,55 +89,30 @@ local send_prompt = function(text, model)
   return output, thinking
 end
 
-local tree
-tree = function(path, fn)
-  utility.list(path or ".", function(path_name)
-    local blacklist = {
-      [".git"] = true,
-      [".gitkeep"] = true,
-      [".gitignore"] = true,
-      [".DS_Store"] = true,
-    }
-    if blacklist[path_name] then return end
-    if utility.is_file(path_name) then
-      fn(path_name)
-    else
-      tree(path .. utility.path_separator .. path_name, fn)
-    end
-  end)
-end
-
-local get_file_size = function(file_name)
-  local file = io.open(file_name, "rb")
-  if file then
-    local size = file:seek("end")
-    file:close()
-    return size
-  end
-end
-
 local refresh_file_list = function()
   local blacklist = { -- I'm only blacklisting binary formats because funny results happen with really invalid texts
     "jpg", "mp4", "pdf", "png", "webp", "jpeg", "gif",
   } for _, name in ipairs(blacklist) do blacklist[name] = true end
 
   local new_files_list = {}
-  tree("PRIVATE_DATA/notebook", function(file_name)
+  utility.tree("PRIVATE_DATA/notebook", {
+    blacklist = utility.enumerate{".git", ".gitignore", ".gitkeep", ".DS_Store"}
+  }, function(file_name)
     local _, _, extension = utility.split_path_components(file_name)
     if not blacklist[extension] then
       new_files_list[#new_files_list + 1] = file_name
     end
   end)
   files = new_files_list
-  write_all("PRIVATE_DATA/file_list.json", json.encode(new_files_list, { indent = true }))
+  utility.save_data(new_files_list, "PRIVATE_DATA/file_list.json")
 end
 
 local generate_and_score = function(file_name, text)
   print("Writing synopsis...")
-  local synopsis = send_prompt(synopsis_prompt .. text)
+  local synopsis = send_prompt(prompts.synopsis_prompt .. text)
   print(synopsis)
   print("Scoring synopsis...")
-  local scoring, thinking = send_prompt(scoring_prompt .. synopsis)
+  local scoring, thinking = send_prompt(prompts.scoring_prompt .. synopsis)
   print(scoring)
   local scoring_decoded = json.decode(scoring) -- likely will not work because it consistently returns Markdown instead of JSON
   if not scoring_decoded then
@@ -201,7 +125,7 @@ local generate_and_score = function(file_name, text)
     thinking = thinking,
   }
 
-  write_all("PRIVATE_DATA/synopses/" .. utility.uuid() .. ".json", json.encode(object, { indent = true }))
+  utility.save_data(object, "PRIVATE_DATA/synopses/" .. utility.uuid() .. ".json")
 end
 
 
@@ -218,12 +142,12 @@ if arg[1] == "repair_synopsis_exports" then
   utility.list(path, function(path_name)
     path_name = path .. utility.path_separator .. path_name
     if path_name:find("%.json") then
-      local object = json.decode(read_all(path_name))
+      local object = utility.load_data(path_name)
       if type(object.scoring) == "table" then return end -- don't fuck with working pieces
       local decoded = json.decode(strip_markdown_codeblock(object.scoring))
       if decoded then
         object.scoring = decoded
-        write_all(path_name, json.encode(object, { indent = true, }))
+        utility.save_data(object, path_name)
       end
     end
   end)
@@ -237,7 +161,7 @@ if arg[1] == "export_ordered_list_of_prompts" then
   utility.list(path, function(path_name)
     local full_path = path .. utility.path_separator .. path_name
     if path_name:find("%.json") then
-      local object = json.decode(read_all(full_path))
+      local object = utility.load_data(full_path)
       items[path_name] = object
       if type(object.scoring) == "table" then
         local s = object.scoring
@@ -269,7 +193,7 @@ if arg[1] == "export_ordered_list_of_prompts" then
     output[#output + 1] = "# " .. v.path_name .. " (" .. v.total_score .. ")\n\n" .. table.concat(tab, "\n") .. "\n"
     output[#output + 1] = "## Scoring\n\n```json\n" .. json.encode(item.scoring, { indent = true, }) .. "\n```\n"
   end
-  write_all("PRIVATE_DATA/Ordered Synopses.md", table.concat(output, "\n"))
+  utility.write_file("PRIVATE_DATA/Ordered Synopses.md", table.concat(output, "\n"))
   os.execute("pandoc \"PRIVATE_DATA/Ordered Synopses.md\" -o \"PRIVATE_DATA/Ordered Synopses.epub\"")
   os.exit(0)
 end
@@ -283,9 +207,9 @@ end
 while true do
   print("Selecting a file...")
   local file_name = files[math.random(1, #files)]
-  local file_size = get_file_size(file_name)
+  local file_size = utility.file_size(file_name)
   if file_size > minimum_bytes and file_size <= maximum_bytes then
-    local text = read_all(file_name)
+    local text = utility.read_file(file_name)
     text = strip_frontmatter(text)
     if #text > minimum_bytes and #text <= maximum_bytes then
       print(file_name .. " chosen.")

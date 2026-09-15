@@ -32,7 +32,7 @@ else
   }
 end
 
-utility.version = "1.6.0"
+utility.version = "1.6.0-modified"
 -- WARNING: This will return "./" if the original script is called locally instead of with an absolute path!
 if arg[0] ~= nil then
   utility.path = (arg[0]:match("@?(.*/)") or arg[0]:match("@?(.*\\)")) -- inspired by discussion in https://stackoverflow.com/q/6380820
@@ -233,6 +233,36 @@ end
 utility.ls = function(...)
   print("WARNING: Use utility.list. This function will be removed.")
   return utility.list(...)
+end
+
+utility.tree = function(path, options, fn)
+  if type(options) == "function" then
+    fn = options
+    options = {}
+  end
+
+  utility.list(path or ".", function(path_name)
+    if options.blacklist and options.blacklist[path_name] then return end
+    if options.whitelist and (not options.whitelist[path_name]) then return end
+    if utility.is_file(path_name) then
+      fn(path_name)
+    else
+      utility.tree(path .. utility.path_separator .. path_name, options, fn)
+    end
+  end)
+end
+
+utility.read_file = function(file_name)
+  return utility.open(file_name, "r", function(file)
+    return file:read("*all")
+  end)
+end
+
+utility.write_file = function(file_name, text)
+  return utility.open(file_name, "w", function(file)
+    file:write(text)
+    file:write("\n")
+  end)
 end
 
 utility.path_exists = function(file_name)
