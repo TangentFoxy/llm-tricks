@@ -552,7 +552,7 @@ end
 utility.mean = function(object)
   local total, count = 0, 0
   for _, value in pairs(object) do
-    total = total = value
+    total = total + value
     count = count + 1
   end
   return total / count, total, count
