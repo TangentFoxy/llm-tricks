@@ -23,7 +23,7 @@ sources. Example:
 
 ```json
 {
-  "source name (unused by the script)":{
+  "source name":{
     "filters":{
       "blacklist":".git",
       "extension_whitelist":"md"
@@ -36,12 +36,11 @@ sources. Example:
 }
 ```
 
-The filters are based on `utility.tree`'s filter options. `initialize_command`
-is only run the first time (optional), while `refresh_command` is run each time
-(optional). Commands will be run in the specified `path`. `strip_frontmatter` is
-for removing YAML frontmatter (common in Markdown files) if truthy.
-
-Filters are optional.
+The filters are based on `utility.tree`'s filter options (optional).
+`initialize_command` is only run the first time (optional),
+while `refresh_command` is run each time (optional).
+Commands will be run in the specified `path`.
+`strip_frontmatter` will remove YAML frontmatter (common in Markdown files).
 
 ### `synopsis_generator.lua`
 Chooses a random file within `notebook`, and generates a novel synopsis from it.

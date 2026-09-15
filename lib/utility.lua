@@ -18,7 +18,7 @@ if package.config:sub(1, 1) == "\\" then
   }
 else
   utility = {
-    OS = "UNIX-like",
+    OS = "Linux",
     path_separator = "/",
     temp_directory = "/tmp/",
     commands = {
@@ -299,6 +299,18 @@ utility.file_size = function(file_path)
   return utility.open(file_path, "rb", function(file) return file:seek("end") end)
 end
 
+utility.sha512sum = function(file_path)
+  local sha512sum
+  if utility.OS == "Linux" then
+    sha512sum = os.capture_safe("shasum -p -t -a 512 " .. file_path:enquote()) -- TODO check this
+  elseif utility.OS == "macOS" then
+    sha512sum = os.capture_safe("shasum -U -a 512 " .. file_path:enquote())
+  elseif utility.OS == "Windows" then
+    error("utility.sha512sum() not implemented for Windows.")
+  end
+  return sha512sum:sub(1, 128)
+end
+
 
 
 utility.escape_quotes_and_escapes = function(input)
@@ -569,5 +581,7 @@ utility.median = function(object)
 end
 
 
+
+if utility.capture_safe("uname"):find("Darwin") == 1 then utility.OS = "macOS" end
 
 return utility

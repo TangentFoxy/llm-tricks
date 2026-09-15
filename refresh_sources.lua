@@ -21,8 +21,21 @@ if not config.models then
   utility.save_config()
 end
 
-local refresh_file_list = function(data_source)
-  timing.mark("Assembling file list.")
+local embeddings
+local embeddings_file_path = "PRIVATE_DATA/memory/+embeddings.json"
+if not utility.path_exists(embeddings_file_path) then
+  os.execute("mkdir -p PRIVATE_DATA/memory")
+  utility.save_data({
+    files = {},
+    vectors = {},
+  }, embeddings_file_path)
+end
+embeddings = utility.load_data(embeddings_file_path)
+
+
+
+local refresh_file_list = function(source_name, data_source)
+  timing.mark("Assembling file list for " .. source_name .. ".")
 
   local full_path = "PRIVATE_DATA" .. utility.path_separator .. data_source.path
   if data_source.initialize_command and (not config.models.initialized_sources[data_source.path]) then
@@ -47,7 +60,7 @@ local refresh_file_list = function(data_source)
     file_list[#file_list + 1] = file_name
   end)
 
-  timing.mark("Finished assembling file list.")
+  timing.mark("Finished assembling file list for " .. source_name .. ".")
   return file_list
 end
 
@@ -97,36 +110,70 @@ local process_file = function(data_source, file_name)
     end
   end
 
-  local embeddings = {}
+  local new_embeddings = {}
   for i = 1, #chunks do
-    embeddings[i] = generate_embeddings(chunks[i])
+    new_embeddings[i] = generate_embeddings(chunks[i]) or {}
   end
 
-  if embeddings[1] == nil then
-    -- TODO average all other embeddings to this one
-  end
-
-  return chunks, embeddings
-end
-
--- TODO somewhere near the top of this function chain needs to be the ability to recognize a file as unchanged and skip re-generating embeddings
---  this means running the same shasum command I will put below on that source file before trying to generate an embedding
---    something something merging new changes into the old data structure means we need to load that data structure first so we only replace modified chunks
-local refresh_sources = function()
-  local sources = utility.load_data("PRIVATE_DATA/sources.json")
-  for _, data_source in pairs(sources) do
-    local file_list = refresh_file_list(data_source)
-    timing.mark("Generating embeddings.")
-    for _, file_name in ipairs(file_list) do
-      local chunks, embeddings = process_file(file_name)
-      -- TODO decide how these will be stored
-      local sum_file_path = "PRIVATE_DATA/.tmp.2b65c19b-0883-49ca-8247-b1fe7760f922"
-      utility.write_file(sum_file_path, text)
-      -- -p ensures compatibility across OSes, -t ensures it is read as text (some OSes default differently), -a 512 ensures it is a 512-bit SHA2 sum
-      local sha512sum = utility.capture_safe("shasum -p -t -a 512 " .. sum_file_path)
-      -- for chunks, save to a specific local tmp file to shasum, then mv that file based on the sum
-      -- for embeddings, store sum = embedding ? (look at how generate_embeddings.lua worked)
+  if #new_embeddings[1] == 0 then
+    -- average all embeddings to make the core file embedding
+    local count = #new_embeddings[2]
+    for vector_index = 1, count do
+      local total = 0
+      for chunk = 2, #new_embeddings do
+        total = total + new_embeddings[chunk][vector_index]
+      end
+      new_embeddings[1][vector_index] = total / count
     end
-    timing.mark("Finished generating embeddings.")
   end
+
+  return chunks, new_embeddings
 end
+
+local refresh_sources = function()
+  local tmp_file_path = "PRIVATE_DATA/.tmp.2b65c19b-0883-49ca-8247-b1fe7760f922"
+  os.execute("mkdir -p PRIVATE_DATA/memory")
+
+  local sources = utility.load_data("PRIVATE_DATA/sources.json")
+  for source_name, data_source in pairs(sources) do
+    local file_list = refresh_file_list(source_name, data_source)
+
+    timing.mark("Generating embeddings for " .. source_name .. ".")
+    for _, file_name in ipairs(file_list) do
+      local function loop()
+        local sha512sum = utility.sha512sum(tmp_file_path)
+        if embeddings.vectors[sha512sum] then return end
+
+        local file_chunks, file_embeddings = process_file(data_source, file_name)
+
+        local file_sums = {}
+        for i = 1, #file_chunks do
+          local function loop()
+            local text = file_chunks[i]
+            local current_embedding = file_embeddings[i]
+
+            utility.write_file(tmp_file_path, text)
+
+            sha512sum = utility.sha512sum(tmp_file_path)
+            file_sums[#file_sums + 1] = sha512sum
+            if embeddings.vectors[sha512sum] then return end
+
+            os.execute(utility.commands.move .. tmp_file_path:enquote() .. " " .. "PRIVATE_DATA/memory/")
+            embeddings.vectors[sha512sum] = current_embedding
+          end
+          loop()
+        end
+
+        embeddings.files[file_name] = file_sums
+      end
+      loop()
+    end
+
+    timing.mark("Finished generating embeddings for " .. source_name .. ".")
+  end
+
+  utility.save_data(embeddings)
+  os.execute("rm " .. tmp_file_path:enquote())
+end
+
+refresh_sources()

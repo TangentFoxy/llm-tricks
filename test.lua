@@ -6,13 +6,7 @@ local json = utility.require("dkjson")
 
 local file_name = arg[1]
 
-print("---")
-print(utility.capture_safe("shasum -p"))
-print("---")
-
-print("---")
-print(utility.capture_safe("shasum -U -a 512 test.lua"))
-print("---")
+print(utility.OS)
 
 os.exit(0)
 
@@ -23,9 +17,6 @@ if prompt:sub(-1) ~= "\n" then
   prompt = prompt .. "\n\n"
 end
 
-local file_contents = utility.open(file_name, "r", function(file)
-  return file:read("*all")
-end)
+local file_contents = utility.read_file(file_name)
 prompt = prompt .. file_contents
-
--- output = output:sub(1, -2) -- strip extra newline from utility.capture_safe
+-- print(utility.llm_prompt(prompt))
