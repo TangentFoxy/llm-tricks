@@ -11,8 +11,10 @@ print(utility.capture_safe("shasum -p"))
 print("---")
 
 print("---")
-print(utility.capture_safe("shasum -U -t -a 512 test.lua"))
+print(utility.capture_safe("shasum -U -a 512 test.lua"))
 print("---")
+
+os.exit(0)
 
 local prompt = [[Return JSON: category, tags (array), summary (short)]]
 -- local prompt = [[Return YAML: category, tags (array), summary (short)]]
