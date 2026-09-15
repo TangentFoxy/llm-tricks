@@ -51,6 +51,9 @@ local generate_and_score = function(file_name, text)
   utility.save_data(object, "PRIVATE_DATA/synopses/" .. utility.uuid() .. ".json")
 end
 
+local export_ordered_list_of_prompts = function()
+end
+
 
 
 os.execute("mkdir -p PRIVATE_DATA/synopses")
@@ -80,7 +83,7 @@ if arg[1] == "export_ordered_list_of_prompts" then
     "---",
     "title: Ordered Synopses (" .. #item_order .. " items)",
     "author: [\"" .. model .. "\", \"Tangent\", \"Ollama\"]",
-    "publisher: Tangent",
+    "publisher: \"synopsis_generator.lua\"",
     "---",
     "",
   }
@@ -100,6 +103,8 @@ if arg[1] == "export_ordered_list_of_prompts" then
   os.execute("pandoc \"PRIVATE_DATA/Ordered Synopses.md\" -o \"PRIVATE_DATA/Ordered Synopses.epub\"")
   os.exit(0)
 end
+
+
 
 print(#files .. " files to select from.")
 if #files == 0 then
