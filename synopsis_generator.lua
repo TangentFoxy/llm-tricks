@@ -24,7 +24,10 @@ local refresh_file_list = function()
     blacklist = utility.enumerate{ ".git", ".gitattributes", ".gitignore", ".gitkeep", ".DS_Store", },
     extension_blacklist = utility.enumerate{ "gif", "jpg", "jpeg", "mp4", "pdf", "png", "webp", },
   }, function(file_name)
-    new_files_list[#new_files_list + 1] = file_name
+    local file_size = utility.file_size(file_name)
+    if file_size > minimum_bytes and file_size <= maximum_bytes then
+      new_files_list[#new_files_list + 1] = file_name
+    end
   end)
   files = new_files_list
   utility.save_data(new_files_list, "PRIVATE_DATA/file_list.json")
