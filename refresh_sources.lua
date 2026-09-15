@@ -56,7 +56,7 @@ local refresh_file_list = function(source_name, data_source)
   end
 
   local file_list = {}
-  utility.tree(data_source.path, compiled_filters, function(file_name)
+  utility.tree("PRIVATE_DATA" .. utility.path_separator .. data_source.path, compiled_filters, function(file_name)
     file_list[#file_list + 1] = file_name
   end)
 
@@ -71,11 +71,6 @@ local generate_embeddings = function(text)
   end
 
   local result = utility.llm_prompt(text, config.models.embedding.model)
-
-  result = setmetatable({}, {
-    __tojson = function() return result end,
-  })
-
   return json.decode(result)
 end
 
@@ -98,13 +93,13 @@ local process_file = function(data_source, file_name)
 
   while #text > chunk_size do
     local first_chunk = text:sub(1, chunk_size)
-    local overlap_chunk = text:sub(half_chunk_size, chunk_size + half_chunk_size)
+    local overlap_chunk = text:sub(half_chunk_size, chunk_size + half_chunk_size - 1)
 
     chunks[#chunks + 1] = first_chunk
     chunks[#chunks + 1] = overlap_chunk
 
     text = text:sub(chunk_size)
-    if #text > half_chunk_size and (not #text > chunk_size) then
+    if (#text > half_chunk_size) and (not (#text > chunk_size)) then
       -- last chunk would be skipped if we didn't handle this here
       chunks[#chunks + 1] = text
     end
@@ -142,10 +137,11 @@ local refresh_sources = function()
     for f = 1, #file_list do
       local file_name = file_list[f]
       local function loop()
-        local sha512sum = utility.sha512sum(tmp_file_path)
+        local sha512sum = utility.sha512sum(file_name)
         if embeddings.vectors[sha512sum] then return end
 
         local file_chunks, file_embeddings = process_file(data_source, file_name)
+        if not file_chunks then return end
 
         local file_sums = {}
         for i = 1, #file_chunks do
@@ -159,7 +155,7 @@ local refresh_sources = function()
             file_sums[#file_sums + 1] = sha512sum
             if embeddings.vectors[sha512sum] then return end
 
-            os.execute(utility.commands.move .. tmp_file_path:enquote() .. " " .. "PRIVATE_DATA/memory/")
+            os.execute(utility.commands.move .. tmp_file_path:enquote() .. " " .. "PRIVATE_DATA/memory/" .. sha512sum)
             embeddings.vectors[sha512sum] = current_embedding
           end
           loop()
@@ -168,14 +164,16 @@ local refresh_sources = function()
         embeddings.files[file_name] = file_sums
       end
       loop()
-      print("Finished " .. utility.leftpad(f, #tostring(#file_list), "0") .. "/" .. #file_list .. " (" .. leftpad(math.floor(i / #file_list * 100), 3, "0") .. "%)")
+      print("Finished " .. utility.leftpad(f, #tostring(#file_list), "0") .. "/" .. #file_list .. " (" .. utility.leftpad(math.floor(f / #file_list * 100), 3, "0") .. "%)")
     end
 
     timing.mark("Finished generating embeddings for " .. source_name .. ".")
   end
 
   utility.save_data(embeddings)
-  os.execute("rm " .. tmp_file_path:enquote())
+  if utility.path_exists(tmp_file_path) then
+    os.execute("rm " .. tmp_file_path:enquote())
+  end
 end
 
 refresh_sources()

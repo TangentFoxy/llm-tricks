@@ -249,13 +249,13 @@ utility.tree = function(path, options, fn)
     if options.blacklist and options.blacklist[path_name] then return end
     if options.whitelist and (not options.whitelist[path_name]) then return end
 
-    if options.extension_blacklist or options.extension_whitelist then
-      local _, _, extension = utility.split_path_components(path_name)
-      if options.extension_blacklist and options.extension_blacklist[extension] then return end
-      if options.extension_whitelist and (not options.extension_whitelist[extension]) then return end
-    end
-
     if utility.is_file(path_name) then
+      if options.extension_blacklist or options.extension_whitelist then
+        local _, _, extension = utility.split_path_components(path_name)
+        if options.extension_blacklist and options.extension_blacklist[extension] then return end
+        if options.extension_whitelist and (not options.extension_whitelist[extension]) then return end
+      end
+
       fn(path_name)
     else
       utility.tree(path .. utility.path_separator .. path_name, options, fn)
@@ -306,9 +306,9 @@ end
 utility.sha512sum = function(file_path)
   local sha512sum
   if utility.OS == "Linux" then
-    sha512sum = os.capture_safe("shasum -p -t -a 512 " .. file_path:enquote()) -- TODO check this
+    sha512sum = utility.capture_safe("shasum -p -t -a 512 " .. file_path:enquote()) -- TODO check this
   elseif utility.OS == "macOS" then
-    sha512sum = os.capture_safe("shasum -U -a 512 " .. file_path:enquote())
+    sha512sum = utility.capture_safe("shasum -U -a 512 " .. file_path:enquote())
   elseif utility.OS == "Windows" then
     error("utility.sha512sum() not implemented for Windows.")
   end

@@ -25,8 +25,8 @@ sources. Example:
 {
   "source name":{
     "filters":{
-      "blacklist":".git",
-      "extension_whitelist":"md"
+      "blacklist":[".git"],
+      "extension_whitelist":["md"]
     },
     "initialize_command":"git clone REMOTE .",
     "path":"will be created before initialize_command is run",
