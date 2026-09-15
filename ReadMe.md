@@ -26,3 +26,4 @@ Arguments:
 
 ## Tasks
 - [ ] synopsis_generator cache should include file sizes to make script running easier/faster
+- [ ] The whitelisting/blacklisting of tree should be in list too.

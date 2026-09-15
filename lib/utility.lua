@@ -244,6 +244,13 @@ utility.tree = function(path, options, fn)
   utility.list(path or ".", function(path_name)
     if options.blacklist and options.blacklist[path_name] then return end
     if options.whitelist and (not options.whitelist[path_name]) then return end
+
+    if options.extension_blacklist or options.extension_whitelist then
+      local _, _, extension = utility.split_path_components(path_name)
+      if options.extension_blacklist and options.extension_blacklist[extension] then return end
+      if options.extension_whitelist and (not options.extension_whitelist[extension]) then return end
+    end
+
     if utility.is_file(path_name) then
       fn(path_name)
     else
@@ -537,6 +544,28 @@ utility.llm_prompt = function(text, model, stabilize)
 
   output = output:sub(1, -2) -- strip extra newline from utility.capture_safe
   return strip_reasoning(output) -- this returns the text AND reasoning
+end
+
+
+
+-- additionally returns total and count
+utility.mean = function(object)
+  local total, count = 0, 0
+  for _, value in pairs(object) do
+    total = total = value
+    count = count + 1
+  end
+  return total / count, total, count
+end
+
+-- additionally returns total
+utility.median = function(object)
+  local tab = {}
+  for _, value in pairs(object) do
+    tab[#tab + 1] = value
+  end
+  table.sort(tab)
+  return tab[math.floor(#tab / 2)], #tab
 end
 
 

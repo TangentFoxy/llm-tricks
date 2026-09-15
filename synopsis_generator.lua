@@ -70,18 +70,16 @@ if arg[1] == "export_ordered_list_of_prompts" then
       local object = utility.load_data(full_path)
       items[path_name] = object
       if type(object.scoring) == "table" then
-        local s = object.scoring
-        local total_score = s.conflict_potential + s.emotional_potential + s.character_potential + s.worldbuilding_potential + s.expansion_potential + s.overall_promise + s.memorability + s.originality + s.curiosity + s.hook
-        item_order[#item_order + 1] = { path_name = path_name, total_score = total_score, }
+        local mean_score, total_score = utility.mean(object.scoring)
+        item_order[#item_order + 1] = { path_name = path_name, total_score = total_score, mean_score = mean_score, }
       end
     end
   end)
-  table.sort(item_order, function(A,B) return A.total_score > B.total_score end)
-  -- for k,v in pairs(item_order) do print(v.path_name,v.total_score) end
+  table.sort(item_order, function(A,B) return A.mean_score > B.mean_score end)
   local output = {
     "---",
     "title: Ordered Synopses (" .. #item_order .. " items)",
-    "author: [\"Gemma4:12b-mlx\", \"Tangent\", \"Ollama\"]",
+    "author: [\"" .. model .. "\", \"Tangent\", \"Ollama\"]",
     "publisher: Tangent",
     "---",
     "",
@@ -95,7 +93,6 @@ if arg[1] == "export_ordered_list_of_prompts" then
         tab[index] = "#" .. tab[index]
       end
     end
-    -- output[#output + 1] = "# " .. v.path_name .. " (" .. v.total_score .. ")\n\n" .. item.synopsis .. "\n"
     output[#output + 1] = "# " .. v.path_name .. " (" .. v.total_score .. ")\n\n" .. table.concat(tab, "\n") .. "\n"
     output[#output + 1] = "## Scoring\n\n```json\n" .. json.encode(item.scoring, { indent = true, }) .. "\n```\n"
   end
