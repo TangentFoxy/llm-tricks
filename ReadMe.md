@@ -28,7 +28,7 @@ sources. Example:
       "blacklist":".git",
       "extension_whitelist":"md"
     },
-    "initialize_command":"git clone REMOTE",
+    "initialize_command":"git clone REMOTE .",
     "path":"will be created before initialize_command is run",
     "strip_frontmatter":true,
     "refresh_command":"git reset --hard origin/main"
