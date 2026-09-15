@@ -52,21 +52,10 @@ local generate_and_score = function(file_name, text)
 end
 
 local export_ordered_list_of_prompts = function()
-end
-
-
-
-os.execute("mkdir -p PRIVATE_DATA/synopses")
-
-if arg[1] == "refresh_file_list" then
-  print("Refresing file list...")
-  refresh_file_list()
-end
-
-if arg[1] == "export_ordered_list_of_prompts" then
   local path = "PRIVATE_DATA/synopses"
   local items = {}
   local item_order = {}
+
   utility.list(path, function(path_name)
     local full_path = path .. utility.path_separator .. path_name
     if path_name:find("%.json") then
@@ -78,7 +67,9 @@ if arg[1] == "export_ordered_list_of_prompts" then
       end
     end
   end)
+
   table.sort(item_order, function(A,B) return A.mean_score > B.mean_score end)
+
   local output = {
     "---",
     "title: Ordered Synopses (" .. #item_order .. " items)",
@@ -87,24 +78,38 @@ if arg[1] == "export_ordered_list_of_prompts" then
     "---",
     "",
   }
+
   for _, v in pairs(item_order) do
     local item = items[v.path_name]
     local text = item.synopsis
     local tab = text:split("\n")
+
     for index, line in ipairs(tab) do
       if line:sub(1, 1) == "#" then
         tab[index] = "#" .. tab[index]
       end
     end
+
     output[#output + 1] = "# " .. v.path_name .. " (" .. v.total_score .. ")\n\n" .. table.concat(tab, "\n") .. "\n"
     output[#output + 1] = "## Scoring\n\n```json\n" .. json.encode(item.scoring, { indent = true, }) .. "\n```\n"
   end
+
   utility.write_file("PRIVATE_DATA/Ordered Synopses.md", table.concat(output, "\n"))
   os.execute("pandoc \"PRIVATE_DATA/Ordered Synopses.md\" -o \"PRIVATE_DATA/Ordered Synopses.epub\"")
-  os.exit(0)
 end
 
 
+
+os.execute("mkdir -p PRIVATE_DATA/synopses")
+
+if arg[1] == "refresh_file_list" then
+  print("Refresing file list...")
+  refresh_file_list()
+  os.exit(0)
+elseif arg[1] == "export_ordered_list_of_prompts" then
+  export_ordered_list_of_prompts()
+  os.exit(0)
+end
 
 print(#files .. " files to select from.")
 if #files == 0 then
