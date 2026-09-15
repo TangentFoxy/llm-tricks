@@ -139,7 +139,8 @@ local refresh_sources = function()
     local file_list = refresh_file_list(source_name, data_source)
 
     timing.mark("Generating embeddings for " .. source_name .. ".")
-    for _, file_name in ipairs(file_list) do
+    for f = 1, #file_list do
+      local file_name = file_list[f]
       local function loop()
         local sha512sum = utility.sha512sum(tmp_file_path)
         if embeddings.vectors[sha512sum] then return end
@@ -167,6 +168,7 @@ local refresh_sources = function()
         embeddings.files[file_name] = file_sums
       end
       loop()
+      print("Finished " .. utility.leftpad(f, #tostring(#file_list), "0") .. "/" .. #file_list .. " (" .. leftpad(math.floor(i / #file_list * 100), 3, "0") .. "%)")
     end
 
     timing.mark("Finished generating embeddings for " .. source_name .. ".")
@@ -177,3 +179,6 @@ local refresh_sources = function()
 end
 
 refresh_sources()
+timing.mark("Finished.")
+print("")
+timing.display()

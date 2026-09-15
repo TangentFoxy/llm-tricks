@@ -81,6 +81,10 @@ standard_library_addition(string, "split", function(s, delimiter)
   return result
 end)
 
+utility.leftpad = function(text, length, character)
+  return string.rep(character or " ", length - #(tostring(text))) .. text
+end
+
 
 
 utility.require = function(...)
