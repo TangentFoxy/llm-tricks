@@ -11,6 +11,10 @@ local model = "gemma4:12b-mlx"
 local minimum_bytes = 1000
 local maximum_bytes = 40000
 
+local NOTEBOOK_PATH = "PRIVATE_DATA/notebook"
+local blacklist = utility.enumerate{ ".git", ".gitattributes", ".gitignore", ".gitkeep", ".DS_Store", }
+local extension_blacklist = utility.enumerate{ "gif", "jpg", "jpeg", "mp4", "pdf", "png", "webp", }
+
 local data_location = "PRIVATE_DATA/synopsis_generator_file_list.json"
 local file_list
 if utility.path_exists(data_location) then
@@ -20,12 +24,12 @@ else
 end
 
 local refresh_file_list = function()
-  os.execute("cd PRIVATE_DATA/notebook && git pull origin")
+  os.execute("cd " .. NOTEBOOK_PATH:enquot() .. " && git pull origin")
 
   local new_files_list = {}
-  utility.tree("PRIVATE_DATA/notebook", {
-    blacklist = utility.enumerate{ ".git", ".gitattributes", ".gitignore", ".gitkeep", ".DS_Store", },
-    extension_blacklist = utility.enumerate{ "gif", "jpg", "jpeg", "mp4", "pdf", "png", "webp", },
+  utility.tree(NOTEBOOK_PATH, {
+    blacklist = blacklist,
+    extension_blacklist = extension_blacklist,
   }, function(file_name)
     local file_size = utility.file_size(file_name)
     if file_size >= minimum_bytes and file_size <= maximum_bytes then
