@@ -8,27 +8,38 @@ local text_processing = utility.require("text_processing")
 local timing = utility.require("timing")
 
 -- TODO make utility have a function for getting/setting defaults where locking is only used to set defaults if they aren't present
+-- TODO there should be a check function for a lock so a warning/error can be dumped?
 local config = utility.get_config("no-lock")
 if not config.models then
   config.models = {
     embedding = {
       model = "qwen3-embedding:0.6b",
       max_chunk_size = 32768,
-    }
+    },
+    initialized_sources = {},
   }
   utility.save_config()
 end
 
--- TODO recognize uninitialized source and initialize it
---  this would need to be in the config
 local refresh_file_list = function(data_source)
   timing.mark("Assembling file list.")
 
-  os.execute("cd " .. ("PRIVATE_DATA" .. utility.path_separator .. data_source.path):enquote() .. " && " .. data_source.refresh_command)
+  local full_path = "PRIVATE_DATA" .. utility.path_separator .. data_source.path
+  if data_source.initialize_command and (not config.models.initialized_sources[data_source.path]) then
+    -- NOTE this is where we'd want to check/obtain a lock on the config so we can safely run this
+    os.execute("mkdir -p " .. full_path:enquote() .. " && cd " .. full_path:enquote() .. " && " .. data_source.initialize_command)
+    config.models.initialized_sources[data_source.path] = true
+    utility.save_config()
+  end
+  if data_source.refresh_command then
+    os.execute("cd " .. full_path:enquote() .. " && " .. data_source.refresh_command)
+  end
 
   local compiled_filters = {}
-  for name, object in pairs(data_source.filters) do
-    compiled_filters[name] = utility.enumerate(object)
+  if data_source.filters then
+    for name, object in pairs(data_source.filters) do
+      compiled_filters[name] = utility.enumerate(object)
+    end
   end
 
   local file_list = {}
@@ -105,11 +116,17 @@ local refresh_sources = function()
   local sources = utility.load_data("PRIVATE_DATA/sources.json")
   for _, data_source in pairs(sources) do
     local file_list = refresh_file_list(data_source)
+    timing.mark("Generating embeddings.")
     for _, file_name in ipairs(file_list) do
       local chunks, embeddings = process_file(file_name)
       -- TODO decide how these will be stored
+      local sum_file_path = "PRIVATE_DATA/.tmp.2b65c19b-0883-49ca-8247-b1fe7760f922"
+      utility.write_file(sum_file_path, text)
+      -- -p ensures compatibility across OSes, -t ensures it is read as text (some OSes default differently), -a 512 ensures it is a 512-bit SHA2 sum
+      local sha512sum = utility.capture_safe("shasum -p -t -a 512 " .. sum_file_path)
       -- for chunks, save to a specific local tmp file to shasum, then mv that file based on the sum
       -- for embeddings, store sum = embedding ? (look at how generate_embeddings.lua worked)
     end
+    timing.mark("Finished generating embeddings.")
   end
 end
