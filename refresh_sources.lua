@@ -107,15 +107,22 @@ local process_file = function(data_source, file_name)
 
   local new_embeddings = {}
   for i = 1, #chunks do
-    print("Embedding length:", #chunks[i])
+    -- print("Embedding length:", #chunks[i])
     new_embeddings[i] = generate_embeddings(chunks[i]) or {}
   end
 
   if #new_embeddings[1] == 0 then
-    print(file_name)
-    print("Vector lengths:")
-    for e = 1, #new_embeddings do
-      print("", e, #new_embeddings[e])
+    -- print(file_name)
+    -- print("Vector lengths:")
+    -- for e = 1, #new_embeddings do
+    --   print("", e, #new_embeddings[e])
+    -- end
+    if #new_embeddings == 1 then
+      -- Ollama very rarely errors with:
+      --   Error: do embedding request: Post "http://127.0.0.1:53441/v1/embeddings": EOF
+      -- but it is inconsistent and re-running will eventually fix it. (See issue #7 if present.)
+      print(file_name .. "\n encountered an embedding error and will be skipped this run only.")
+      return
     end
 
     -- average all embeddings to make the core file embedding
@@ -145,7 +152,13 @@ local refresh_sources = function()
       local file_name = file_list[f]
       local function loop()
         local sha512sum = utility.sha512sum(file_name)
-        if embeddings.vectors[sha512sum] then return end
+        if embeddings.vectors[sha512sum] then
+          -- add file reference if it was missing
+          if not embeddings.files[file_name] then
+            embeddings.files[file_name] = sha512sum
+          end
+          return
+        end
 
         local file_chunks, file_embeddings = process_file(data_source, file_name)
         if not file_chunks then return end
