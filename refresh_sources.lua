@@ -107,10 +107,17 @@ local process_file = function(data_source, file_name)
 
   local new_embeddings = {}
   for i = 1, #chunks do
+    print("Embedding length:", #chunks[i])
     new_embeddings[i] = generate_embeddings(chunks[i]) or {}
   end
 
   if #new_embeddings[1] == 0 then
+    print(file_name)
+    print("Vector lengths:")
+    for e = 1, #new_embeddings do
+      print("", e, #new_embeddings[e])
+    end
+
     -- average all embeddings to make the core file embedding
     local count = #new_embeddings[2]
     for vector_index = 1, count do
@@ -164,7 +171,9 @@ local refresh_sources = function()
         embeddings.files[file_name] = file_sums
       end
       loop()
-      print("Finished " .. utility.leftpad(f, #tostring(#file_list), "0") .. "/" .. #file_list .. " (" .. utility.leftpad(math.floor(f / #file_list * 100), 3, "0") .. "%)")
+      print("Finished " .. utility.leftpad(f, #tostring(#file_list), "0") .. "/" .. #file_list
+        .. " (" .. utility.leftpad(math.floor(f / #file_list * 100), 3, "0")
+        .. "%) ETA: " .. timing.estimate(f, #file_list))
     end
 
     timing.mark("Finished generating embeddings for " .. source_name .. ".")
