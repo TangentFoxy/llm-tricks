@@ -586,6 +586,8 @@ end
 
 
 
-if utility.capture_safe("uname"):find("Darwin") == 1 then utility.OS = "macOS" end
+if (utility.OS == "Linux") and (utility.capture_safe("uname"):find("Darwin") == 1) then
+  utility.OS = "macOS"
+end
 
 return utility
