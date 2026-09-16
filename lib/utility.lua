@@ -221,7 +221,7 @@ utility.list = function(path, func)
 
   local run = function(fn)
     for line in output:gmatch("[^\r\n]+") do -- thanks to https://stackoverflow.com/a/32847589
-      if not (line == "." or line == "..") then
+      if not ((line == ".") or (line == "..")) then
         fn(line)
       end
     end
@@ -239,7 +239,8 @@ utility.ls = function(...)
   return utility.list(...)
 end
 
-utility.tree = function(path, options, fn)
+local tree
+tree = function(path, options, fn)
   if type(options) == "function" then
     fn = options
     options = {}
@@ -258,7 +259,16 @@ utility.tree = function(path, options, fn)
 
       fn(path_name)
     else
-      utility.tree(path .. utility.path_separator .. path_name, options, fn)
+      tree(path .. utility.path_separator .. path_name, options, fn)
+    end
+  end)
+end
+utility.tree = function(path, options, fn)
+  tree(path, options, function(path_name)
+    if path_name:find(path) == 1 then
+      fn(path_name)
+    else
+      fn(path .. utility.path_separator .. path_name)
     end
   end)
 end

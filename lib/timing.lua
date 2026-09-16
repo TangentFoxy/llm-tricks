@@ -40,6 +40,7 @@ timing.mark = function(label)
   if #timing > 1 then
     timing.display(#timing)
   end
+  print("", "", label)
 end
 
 timing.estimate = function(current_position, total_operations)

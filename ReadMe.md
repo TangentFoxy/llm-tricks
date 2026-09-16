@@ -42,6 +42,21 @@ while `refresh_command` is run each time (optional).
 Commands will be run in the specified `path`.
 `strip_frontmatter` will remove YAML frontmatter (common in Markdown files).
 
+The embeddings are stored like so:
+
+```json
+{
+  "files":{
+    "PRIVATE_DATA/source_path/path/to/file.ext":["sha512sum", "another sum"]
+  },
+  "vectors":{
+    "sha512sum":[0.5, 0, 1, -0.5, -1, ...]
+  }
+}
+```
+
+TODO
+
 ### `synopsis_generator.lua`
 Chooses a random file within `notebook`, and generates a novel synopsis from it.
 
