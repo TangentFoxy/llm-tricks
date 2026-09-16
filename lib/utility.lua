@@ -305,9 +305,7 @@ end
 
 utility.sha512sum = function(file_path)
   local sha512sum
-  if utility.OS == "Linux" then
-    sha512sum = utility.capture_safe("shasum -p -t -a 512 " .. file_path:enquote()) -- TODO check this
-  elseif utility.OS == "macOS" then
+  if (utility.OS == "Linux") or (utility.OS == "macOS") then
     sha512sum = utility.capture_safe("shasum -U -a 512 " .. file_path:enquote())
   elseif utility.OS == "Windows" then
     error("utility.sha512sum() not implemented for Windows.")
