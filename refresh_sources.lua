@@ -23,11 +23,11 @@ if not config.models then
 end
 
 log{
-  -- info = true,
-  -- warning = true,
+  info = true,
+  warning = true,
   -- debug = true,
   -- files = true, -- debugging why the wrong files are selected
-  sha = true, -- what the fuck is going on with sha sums?
+  -- sha = true, -- what the fuck is going on with sha sums?
 }
 
 local memory_path = "PRIVATE_DATA" .. utility.path_separator .. "memory"
