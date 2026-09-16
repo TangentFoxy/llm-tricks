@@ -279,10 +279,10 @@ utility.read_file = function(file_name)
   end)
 end
 
-utility.write_file = function(file_name, text)
+utility.write_file = function(file_name, ...)
   return utility.open(file_name, "w", function(file)
-    file:write(text)
-    file:write("\n")
+    file:write(table.concat{...})
+    -- file:write("\n") -- I need to make sure /I/ handle this instead of trying to automate it
   end)
 end
 

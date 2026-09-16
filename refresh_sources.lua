@@ -225,7 +225,7 @@ local refresh_sources = function()
       local file_name = file_list[f]
       local function loop()
         local sha512sum = utility.sha512sum(file_name)
-        log("sha", file_name, sha512sum, tostring(embeddings.vectors[sha512sum]))
+        log("sha", file_name, sha512sum, "\n Sum present? " .. tostring(embeddings.vectors[sha512sum]))
         if embeddings.vectors[sha512sum] then
           log("debug", file_name .. "\n has already been embedded, skipping.")
           -- add file reference if it was missing

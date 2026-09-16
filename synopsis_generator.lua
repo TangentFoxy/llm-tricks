@@ -108,7 +108,7 @@ local export_ordered_list_of_prompts = function()
     output[#output + 1] = "## Scoring\n\n```json\n" .. json.encode(item.scoring, { indent = true, }) .. "\n```\n"
   end
 
-  utility.write_file("PRIVATE_DATA/Ordered Synopses.md", table.concat(output, "\n"))
+  utility.write_file("PRIVATE_DATA/Ordered Synopses.md", table.concat(output, "\n"), "\n")
   os.execute("pandoc \"PRIVATE_DATA/Ordered Synopses.md\" -o \"PRIVATE_DATA/Ordered Synopses.epub\"")
 end
 
