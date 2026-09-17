@@ -98,10 +98,11 @@ local export_ordered_list_of_prompts = function()
     local tab = text:split("\n")
 
     for index, line in ipairs(tab) do
-      -- ensure no output heading is an H1
-      -- TODO make H6 get turned into a bold line
-      if line:sub(1, 1) == "#" then
-        tab[index] = "#" .. tab[index]
+      -- ensure no output heading is an H1; make H6 bold text lines instead
+      if line:sub(1, 7) == "###### " then
+        tab[index] = "**" .. line:sub(8) .. "**"
+      elseif line:sub(1, 1) == "#" then
+        tab[index] = "#" .. line
       end
     end
 
