@@ -96,3 +96,6 @@ and `initialized_sources` to store which sources have been initialized.
 ## Tasks
 - [ ] The whitelisting/blacklisting of tree should be in list too.
 - [ ] synopsis_generator should be able to blacklist files it already tried?
+- [ ] `refresh_sources.lua` doesn't check for defined files that don't exist
+  anymore, does it?
+  - [ ] I think it checks for every other possibility, but this needs checking.

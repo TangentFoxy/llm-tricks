@@ -7,49 +7,49 @@ local json = utility.require("dkjson")
 local prompts = utility.require("prompts")
 local text_processing = utility.require("text_processing")
 
-local model = "gemma4:12b-mlx"
-local minimum_bytes = 1000
-local maximum_bytes = 40000
+local config = utility.get_config_with_defaults{
+  models = {
+    synopsis_generator = {
+      model = "gemma4:12b-mlx",
+      minimum_bytes = 1000,
+      maximum_bytes = 40000,
+    },
+  },
+}
 
-local NOTEBOOK_PATH = "PRIVATE_DATA/notebook"
-local blacklist = utility.enumerate{ ".git", ".gitattributes", ".gitignore", ".gitkeep", ".DS_Store", }
-local extension_blacklist = utility.enumerate{ "gif", "jpg", "jpeg", "mp4", "pdf", "png", "webp", }
-
-local data_location = "PRIVATE_DATA/synopsis_generator_file_list.json"
-local file_list
-if utility.path_exists(data_location) then
-  file_list = utility.load_data(data_location)
-else
-  file_list = {}
-end
+local memory_path = "PRIVATE_DATA" .. utility.path_separator .. "memory"
+local embeddings_file_path = memory_path .. utility.path_separator .. "+embeddings.json"
+local data_path = "PRIVATE_DATA" .. utility.path_separator .. "synopses"
+local data_location = data_path .. utility.path_separator .. "+file_list.json"
 
 local refresh_file_list = function()
-  os.execute("cd " .. NOTEBOOK_PATH:enquot() .. " && git pull origin")
+  assert(utility.path_exists(embeddings_file_path), "Run \"./refresh_sources.lua\" to set up memory.")
+  local embeddings = utility.load_data(embeddings_file_path)
 
-  local new_files_list = {}
-  utility.tree(NOTEBOOK_PATH, {
-    blacklist = blacklist,
-    extension_blacklist = extension_blacklist,
-  }, function(file_name)
+  local minimum_bytes = config.models.synopsis_generator.minimum_bytes
+  local maximum_bytes = config.models.synopsis_generator.maximum_bytes
+
+  local file_list = {}
+  for file_name, sha512sum_list in pairs(embeddings.files) do
     local file_size = utility.file_size(file_name)
     if file_size >= minimum_bytes and file_size <= maximum_bytes then
       local text = text_processing.strip_frontmatter(utility.read_file(file_name))
       if #text >= minimum_bytes and #text <= maximum_bytes then
-        new_files_list[#new_files_list + 1] = file_name
+        file_list[#file_list + 1] = { file_name = file_name, }
       end
     end
-  end)
+  end
 
-  file_list = new_files_list
-  utility.save_data(new_files_list, data_location)
+  utility.save_data(file_list, data_location)
+  return file_list
 end
 
 local generate_and_score = function(file_name, text)
   print("Writing synopsis...")
-  local synopsis = utility.llm_prompt(prompts.synopsis_prompt .. text, model)
+  local synopsis = utility.llm_prompt(prompts.synopsis_prompt .. text, config.models.synopsis_generator.model)
   print(synopsis)
   print("Scoring synopsis...")
-  local scoring, thinking = utility.llm_prompt(prompts.scoring_prompt .. synopsis, model)
+  local scoring, thinking = utility.llm_prompt(prompts.scoring_prompt .. synopsis, config.models.synopsis_generator.model)
   print(scoring)
   local scoring_decoded = json.decode(scoring) -- likely will not work because it consistently returns Markdown instead of JSON
   if not scoring_decoded then
@@ -62,23 +62,22 @@ local generate_and_score = function(file_name, text)
     thinking = thinking,
   }
 
-  utility.save_data(object, "PRIVATE_DATA/synopses/" .. utility.uuid() .. ".json")
+  utility.save_data(object, data_path .. utility.path_separator .. utility.uuid() .. ".json")
 end
 
 local export_ordered_list_of_prompts = function()
-  local path = "PRIVATE_DATA/synopses"
   local items = {}
   local item_order = {}
 
-  utility.list(path, function(path_name)
-    local full_path = path .. utility.path_separator .. path_name
-    if path_name:find("%.json") then
-      local object = utility.load_data(full_path)
-      items[path_name] = object
-      if type(object.scoring) == "table" then
-        local mean_score, total_score = utility.mean(object.scoring)
-        item_order[#item_order + 1] = { path_name = path_name, total_score = total_score, mean_score = mean_score, }
-      end
+  utility.list(data_path, function(path_name)
+    local full_path = data_path .. utility.path_separator .. path_name
+    if full_path == data_location then return end
+
+    local object = utility.load_data(full_path)
+    items[path_name] = object
+    if type(object.scoring) == "table" then
+      local mean_score, total_score = utility.mean(object.scoring)
+      item_order[#item_order + 1] = { path_name = path_name, total_score = total_score, mean_score = mean_score, }
     end
   end)
 
@@ -87,7 +86,7 @@ local export_ordered_list_of_prompts = function()
   local output = {
     "---",
     "title: Ordered Synopses (" .. #item_order .. " items)",
-    "author: [\"" .. model .. "\", \"Tangent\", \"Ollama\"]",
+    "author: [\"" .. config.models.synopsis_generator.model .. "\", \"Tangent\", \"Ollama\"]",
     "publisher: \"synopsis_generator.lua\"",
     "---",
     "",
@@ -99,6 +98,8 @@ local export_ordered_list_of_prompts = function()
     local tab = text:split("\n")
 
     for index, line in ipairs(tab) do
+      -- ensure no output heading is an H1
+      -- TODO make H6 get turned into a bold line
       if line:sub(1, 1) == "#" then
         tab[index] = "#" .. tab[index]
       end
@@ -114,25 +115,27 @@ end
 
 
 
-os.execute("mkdir -p PRIVATE_DATA/synopses")
+os.execute("mkdir -p " .. data_path:enquote())
+
+local file_list
+if utility.path_exists(data_location) then
+  file_list = utility.load_data(data_location)
+end
 
 if arg[1] == "refresh_file_list" then
   print("Refresing file list...")
-  refresh_file_list()
+  file_list = refresh_file_list()
   os.exit(0)
 elseif arg[1] == "export_ordered_list_of_prompts" then
   export_ordered_list_of_prompts()
   os.exit(0)
 end
 
-print(#file_list .. " files to select from.")
-if #file_list == 0 then
-  print("Run \"./synopsis_generator.lua refresh_file_list\" first.")
-  os.exit(1)
-end
+assert(file_list and (#file_list > 0), "Run \"./synopsis_generator.lua refresh_file_list\" first.")
 
+print(#file_list .. " files to select from.")
 while true do
-  local file_name = file_list[math.random(1, #file_list)]
+  local file_name = file_list[math.random(1, #file_list)].file_name
   local text = utility.read_file(file_name)
   print(file_name .. " chosen.")
   generate_and_score(file_name, text)

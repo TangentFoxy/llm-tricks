@@ -31,7 +31,6 @@ local memory_path = "PRIVATE_DATA" .. utility.path_separator .. "memory"
 local embeddings_file_path = memory_path .. utility.path_separator .. "+embeddings.json"
 local tmp_file_path = "PRIVATE_DATA" .. utility.path_separator .. ".tmp.2b65c19b-0883-49ca-8247-b1fe7760f922"
 
-local embeddings
 if not utility.path_exists(embeddings_file_path) then
   os.execute("mkdir -p " .. memory_path:enquote())
   utility.save_data({
@@ -39,7 +38,7 @@ if not utility.path_exists(embeddings_file_path) then
     vectors = {},
   }, embeddings_file_path)
 end
-embeddings = utility.load_data(embeddings_file_path)
+local embeddings = utility.load_data(embeddings_file_path)
 if log.debug then
   log("debug", "Embeddings loaded.", embeddings, embeddings.files, embeddings.vectors)
   local file_count = 0
