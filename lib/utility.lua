@@ -18,7 +18,7 @@ if package.config:sub(1, 1) == "\\" then
   }
 else
   utility = {
-    OS = "UNIX-like",
+    OS = "Linux",
     path_separator = "/",
     temp_directory = "/tmp/",
     commands = {
@@ -80,6 +80,10 @@ standard_library_addition(string, "split", function(s, delimiter)
   end
   return result
 end)
+
+utility.leftpad = function(text, length, character)
+  return string.rep(character or " ", length - #(tostring(text))) .. text
+end
 
 
 
@@ -217,7 +221,7 @@ utility.list = function(path, func)
 
   local run = function(fn)
     for line in output:gmatch("[^\r\n]+") do -- thanks to https://stackoverflow.com/a/32847589
-      if not (line == "." or line == "..") then
+      if not ((line == ".") or (line == "..")) then
         fn(line)
       end
     end
@@ -235,7 +239,8 @@ utility.ls = function(...)
   return utility.list(...)
 end
 
-utility.tree = function(path, options, fn)
+local tree
+tree = function(path, options, fn)
   if type(options) == "function" then
     fn = options
     options = {}
@@ -245,16 +250,25 @@ utility.tree = function(path, options, fn)
     if options.blacklist and options.blacklist[path_name] then return end
     if options.whitelist and (not options.whitelist[path_name]) then return end
 
-    if options.extension_blacklist or options.extension_whitelist then
-      local _, _, extension = utility.split_path_components(path_name)
-      if options.extension_blacklist and options.extension_blacklist[extension] then return end
-      if options.extension_whitelist and (not options.extension_whitelist[extension]) then return end
-    end
-
     if utility.is_file(path_name) then
+      if options.extension_blacklist or options.extension_whitelist then
+        local _, _, extension = utility.split_path_components(path_name)
+        if options.extension_blacklist and options.extension_blacklist[extension] then return end
+        if options.extension_whitelist and (not options.extension_whitelist[extension]) then return end
+      end
+
       fn(path_name)
     else
-      utility.tree(path .. utility.path_separator .. path_name, options, fn)
+      tree(path .. utility.path_separator .. path_name, options, fn)
+    end
+  end)
+end
+utility.tree = function(path, options, fn)
+  tree(path, options, function(path_name)
+    if path_name:find(path) == 1 then
+      fn(path_name)
+    else
+      fn(path .. utility.path_separator .. path_name)
     end
   end)
 end
@@ -265,10 +279,11 @@ utility.read_file = function(file_name)
   end)
 end
 
-utility.write_file = function(file_name, text)
+utility.write_file = function(file_name, ...)
+  local text = table.concat{...}
   return utility.open(file_name, "w", function(file)
     file:write(text)
-    file:write("\n")
+    -- file:write("\n") -- I need to make sure /I/ handle this instead of trying to automate it
   end)
 end
 
@@ -297,6 +312,16 @@ end
 
 utility.file_size = function(file_path)
   return utility.open(file_path, "rb", function(file) return file:seek("end") end)
+end
+
+utility.sha512sum = function(file_path)
+  local sha512sum
+  if (utility.OS == "Linux") or (utility.OS == "macOS") then
+    sha512sum = utility.capture_safe("shasum -U -a 512 " .. file_path:enquote())
+  elseif utility.OS == "Windows" then
+    error("utility.sha512sum() not implemented for Windows.")
+  end
+  return sha512sum:sub(1, 128)
 end
 
 
@@ -569,5 +594,9 @@ utility.median = function(object)
 end
 
 
+
+if (utility.OS == "Linux") and (utility.capture_safe("uname"):find("Darwin") == 1) then
+  utility.OS = "macOS"
+end
 
 return utility
