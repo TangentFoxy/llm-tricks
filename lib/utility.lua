@@ -375,10 +375,10 @@ end
 
 
 
+local config_path = utility.path .. "config.json"
 local config, config_lock
 utility.get_config = function(skip_lock)
   if not config then
-    local config_path = utility.path .. "config.json"
     if utility.is_file(config_path) then
       if not skip_lock then
         config_lock = utility.get_lock(config_path)
@@ -396,7 +396,6 @@ end
 
 utility.save_config = function()
   if config then
-    local config_path = utility.path .. "config.json"
     if not config_lock then
       print("Warning: A config lock file was not established.")
     end
@@ -410,6 +409,31 @@ utility.save_config = function()
   else
     error("utility config not loaded")
   end
+end
+
+utility.get_config_with_defaults = function(defaults)
+  local config = utility.get_config()
+
+  local loop, changes_made
+  loop = function(config_level, default_level)
+    for k,v in pairs(default_level) do
+      if not config_level[k] then
+        config_level[k] = v
+        changes_made = true
+      elseif type(v) == "table" then
+        loop(config_level[k], v)
+      end
+    end
+  end
+  loop(config, defaults)
+
+  if changes_made then
+    utility.save_config()
+  else
+    utility.release_lock(config_path)
+  end
+
+  return config
 end
 
 

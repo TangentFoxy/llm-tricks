@@ -8,19 +8,16 @@ local log = utility.require("log")
 local text_processing = utility.require("text_processing")
 local timing = utility.require("timing")
 
--- TODO make utility have a function for getting/setting defaults where locking is only used to set defaults if they aren't present
 -- TODO there should be a check function for a lock so a warning/error can be dumped?
-local config = utility.get_config("no-lock")
-if not config.models then
-  config.models = {
+local config = utility.get_config_with_defaults{
+  models = {
     embedding = {
       model = "qwen3-embedding:0.6b",
       max_chunk_size = 32768,
     },
     initialized_sources = {},
-  }
-  utility.save_config()
-end
+  },
+}
 
 log{
   info = true,
@@ -257,7 +254,7 @@ local refresh_sources = function()
 
         if embeddings.vectors[sha512sum] then
           log("debug", file_name .. "\n has already been embedded, skipping.")
-          -- add file reference if it was missing
+          -- add file reference if it was missing (also handles recognition of duplicate files)
           if not embeddings.files[file_name] then
             embeddings.files[file_name] = { sha512sum }
           end
