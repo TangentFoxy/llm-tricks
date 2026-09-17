@@ -25,7 +25,7 @@ end
 log{
   info = true,
   warning = true,
-  -- debug = true,
+  debug = false,
   -- files = true, -- debugging why the wrong files are selected
   -- sha = true, -- what the fuck is going on with sha sums?
 }
@@ -43,7 +43,7 @@ if not utility.path_exists(embeddings_file_path) then
   }, embeddings_file_path)
 end
 embeddings = utility.load_data(embeddings_file_path)
-local function embeddings_debug()
+if log.debug then
   log("debug", "Embeddings loaded.", embeddings, embeddings.files, embeddings.vectors)
   local file_count = 0
   for k,v in pairs(embeddings.files) do
@@ -57,7 +57,6 @@ local function embeddings_debug()
   log("debug", vector_count .. " vectors.")
   -- os.exit(1)
 end
-embeddings_debug()
 
 
 
@@ -93,12 +92,15 @@ local refresh_file_list = function(source_name, data_source)
 end
 
 -- returns nothing when too much text is sent
-local generate_embeddings = function(text)
-  if #text > config.models.embedding.max_chunk_size then
+local generate_embeddings = function(data_source, text)
+  local max_chunk_size = data_source.max_chunk_size or config.models.embedding.max_chunk_size
+  local model = data_source.embedding_model or config.models.embedding.model
+
+  if #text > max_chunk_size then
     return nil, "generate_embeddings() must only be passed appropriately-sized chunks!"
   end
 
-  local result = utility.llm_prompt(text, config.models.embedding.model)
+  local result = utility.llm_prompt(text, model)
   return json.decode(result)
 end
 
@@ -115,7 +117,7 @@ local process_file = function(data_source, file_name)
     return
   end
 
-  local chunk_size = config.models.embedding.max_chunk_size
+  local chunk_size = data_source.max_chunk_size or config.models.embedding.max_chunk_size
   local half_chunk_size = math.floor(chunk_size / 2)
   local chunks = { text }
 
@@ -136,13 +138,15 @@ local process_file = function(data_source, file_name)
   local new_embeddings = {}
   for i = 1, #chunks do
     log("debug", "Embedding length:", #chunks[i])
-    new_embeddings[i] = generate_embeddings(chunks[i]) or {}
+    new_embeddings[i] = generate_embeddings(data_source, chunks[i]) or {}
   end
 
   if #new_embeddings[1] == 0 then
-    log("debug", "Vector lengths:")
-    for e = 1, #new_embeddings do
-      log("debug", "", e, #new_embeddings[e])
+    if log.debug then
+      log("debug", "Vector lengths:")
+      for e = 1, #new_embeddings do
+        log("debug", "", e, #new_embeddings[e])
+      end
     end
     if #new_embeddings == 1 then
       -- Ollama very rarely errors with:
