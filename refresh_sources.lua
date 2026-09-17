@@ -61,7 +61,7 @@ end
 
 
 local refresh_file_list = function(source_name, data_source)
-  timing.mark("Assembling file list for " .. source_name .. ".")
+  timing.mark("Assembling file list for \"" .. source_name .. "\"")
 
   local full_path = "PRIVATE_DATA" .. utility.path_separator .. data_source.path
   if data_source.initialize_command and (not config.models.initialized_sources[data_source.path]) then
@@ -87,7 +87,7 @@ local refresh_file_list = function(source_name, data_source)
     file_list[#file_list + 1] = file_name
   end)
 
-  timing.mark("Finished assembling file list for " .. source_name .. ".")
+  timing.mark("Finished assembling file list for \"" .. source_name .. "\"")
   return file_list
 end
 
@@ -104,20 +104,9 @@ local generate_embeddings = function(data_source, text)
   return json.decode(result)
 end
 
--- returns nothing for empty files and errors
-local process_file = function(data_source, file_name)
-  local text = utility.read_file(file_name)
+local make_chunks = function(text, chunk_size)
+  assert(chunk_size, "make_chunks() requires chunk_size")
 
-  if data_source.strip_frontmatter then
-    text = text_processing.strip_frontmatter(text)
-  end
-
-  if #text == 0 then
-    log("empty", file_name .. "\n is empty and being skipped.")
-    return
-  end
-
-  local chunk_size = data_source.max_chunk_size or config.models.embedding.max_chunk_size
   local half_chunk_size = math.floor(chunk_size / 2)
   local chunks = { text }
 
@@ -134,6 +123,25 @@ local process_file = function(data_source, file_name)
       chunks[#chunks + 1] = text
     end
   end
+
+  return chunks
+end
+
+-- returns nothing for empty files and errors
+local process_file = function(data_source, file_name)
+  local text = utility.read_file(file_name)
+
+  if data_source.strip_frontmatter then
+    text = text_processing.strip_frontmatter(text)
+  end
+
+  if #text == 0 then
+    log("empty", file_name .. "\n is empty and being skipped.")
+    return
+  end
+
+  local chunk_size = data_source.max_chunk_size or config.models.embedding.max_chunk_size
+  local chunks = make_chunks(text, chunk_size)
 
   local new_embeddings = {}
   for i = 1, #chunks do
@@ -202,6 +210,15 @@ local memorize_file = function(data_source, file_name)
   return file_sums
 end
 
+local delete_memories = function(sha512sum_list)
+  -- if true then return end -- TEMP disabling removal to compare and verify function
+  for i = 1, #sha512sum_list do
+    local sha512sum = sha512sum_list[i]
+    embeddings.vectors[sha512sum] = nil
+    os.execute("rm " .. (memory_path .. utility.path_separator .. sha512sum):enquote())
+  end
+end
+
 local refresh_sources = function()
   os.execute("mkdir -p " .. memory_path:enquote())
 
@@ -230,6 +247,7 @@ local refresh_sources = function()
       local function loop()
         local sha512sum = utility.sha512sum(file_name)
         log("sha", file_name, sha512sum, "\n Sum present? " .. tostring(embeddings.vectors[sha512sum]))
+
         if embeddings.vectors[sha512sum] then
           log("debug", file_name .. "\n has already been embedded, skipping.")
           -- add file reference if it was missing
@@ -239,7 +257,13 @@ local refresh_sources = function()
           return
         end
 
-        log("debug", "Generating embeddings for " .. file_name .. ".")
+        if embeddings.files[file_name] then
+          log("debug", file_name .. "\n Removing old embeddings for modified file.")
+          delete_memories(embeddings.files[file_name])
+          embeddings.files[file_name] = nil
+        end
+
+        log("debug", file_name .. "\n Generating embeddings..")
         local file_sums = memorize_file(data_source, file_name)
         embeddings.files[file_name] = file_sums
       end
