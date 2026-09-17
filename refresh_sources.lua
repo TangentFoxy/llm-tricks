@@ -143,9 +143,16 @@ local process_file = function(data_source, file_name)
   local chunk_size = data_source.max_chunk_size or config.models.embedding.max_chunk_size
   local chunks = make_chunks(text, chunk_size)
 
+  if data_source.target_chunk_size then
+    local extra_chunks = make_chunks(text, data_source.target_chunk_size)
+    for i = 2, #extra_chunks do
+      chunks[#chunks + 1] = extra_chunks[i]
+    end
+  end
+
   local new_embeddings = {}
   for i = 1, #chunks do
-    log("debug", "Embedding length:", #chunks[i])
+    log("debug", "Embedding source length:", #chunks[i])
     new_embeddings[i] = generate_embeddings(data_source, chunks[i]) or {}
   end
 

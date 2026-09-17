@@ -22,7 +22,7 @@ local enable_logging = true
 local message_limit = math.huge
 
 return setmetatable(microlog, {
-  __call = function(options, ...)
+  __call = function(self, options, ...)
     local options_type = type(options)
 
     if (options_type == "string") and enable_logging then
