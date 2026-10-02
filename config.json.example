@@ -1,0 +1,9 @@
+{
+  "models":{
+    "embedding":{
+      "model":"qwen3-embedding:0.6b",
+      "max_chunk_size":32768
+    },
+    "initialized_sources":{}
+  }
+}
