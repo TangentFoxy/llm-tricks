@@ -20,9 +20,10 @@ timing.display = function(n)
     local time = timing[n]
     local previous = timing[n - 1]
 
-    local delta = human_readable_time(time.time - previous.time)
+    local delta = time.time - previous.time
+    if delta < 1 then return end -- don't print insignificant time use
 
-    print(delta, previous.label)
+    print(human_readable_time(delta), previous.label)
   end
 
   if n then
