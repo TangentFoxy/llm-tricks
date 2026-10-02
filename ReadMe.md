@@ -94,8 +94,11 @@ the repo root that is excluded from commits.
 and `initialized_sources` to store which sources have been initialized.
 
 ## Tasks
-- [ ] The whitelisting/blacklisting of tree should be in list too.
+- [ ] The whitelisting/blacklisting of utility.tree should be in utility.list
+  too.
 - [ ] synopsis_generator should be able to blacklist files it already tried?
 - [ ] `refresh_sources.lua` doesn't check for defined files that don't exist
-  anymore, does it?
-  - [ ] I think it checks for every other possibility, but this needs checking.
+  anymore ~~, does it?~~
+  - [x] I think it checks for every other possibility, but this needs checking.
+- [ ] refresh_sources should create a sha to files list so that sources can be
+  referenced by their original name
