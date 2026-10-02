@@ -55,6 +55,9 @@ The embeddings are stored like so:
   "files":{
     "PRIVATE_DATA/source_path/path/to/file.ext":["sha512sum", "another sum"]
   },
+  "sources":{
+    "idk yet what to key this by":["sha512sum", "another sum"]
+  },
   "vectors":{
     "sha512sum":[0.5, 0, 1, -0.5, -1, ...]
   }
@@ -66,6 +69,9 @@ names reference a list of text chunks so they can handle being too large. Every
 file that is too large for a single chunk has a whole-file embedding calculated
 first (it is the first element of the array), so that if a whole file becomes
 relevant, it can still show up instead of only chunks.
+
+I've added the *concept* of storing non-file-based sources as well, but it isn't
+being used yet.
 
 ### `synopsis_generator.lua`
 Chooses a random file within `notebook`, and generates a novel synopsis from it.
@@ -100,5 +106,8 @@ and `initialized_sources` to store which sources have been initialized.
 - [ ] `refresh_sources.lua` doesn't check for defined files that don't exist
   anymore ~~, does it?~~
   - [x] I think it checks for every other possibility, but this needs checking.
-- [ ] refresh_sources should create a sha to files list so that sources can be
+- [i] refresh_sources should create a sha to files list so that sources can be
   referenced by their original name
+  - I decided not to do this and only do it if it becomes a problem. The issue
+    is that it's not very useful, and conflicts with the goal "does this sha
+    come from a specific source" since sources can in theory not be files.

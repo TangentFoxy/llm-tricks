@@ -3,6 +3,11 @@
 package.path = (arg[0]:match("@?(.*/)") or arg[0]:match("@?(.*\\)")) .. "lib" .. package.config:sub(1, 1) .. "?.lua;" .. package.path
 local utility = require "utility"
 local json = utility.require("dkjson")
+local log = utility.require("log")
+
+log{ test = true, }
+log("test", "This log has a ", nil, " in it.") -- this can be changed
+os.exit(0)
 
 local file_name = arg[1]
 

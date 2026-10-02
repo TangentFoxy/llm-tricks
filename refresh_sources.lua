@@ -31,14 +31,17 @@ local memory_path = "PRIVATE_DATA" .. utility.path_separator .. "memory"
 local embeddings_file_path = memory_path .. utility.path_separator .. "+embeddings.json"
 local tmp_file_path = "PRIVATE_DATA" .. utility.path_separator .. ".tmp.2b65c19b-0883-49ca-8247-b1fe7760f922"
 
+timing.mark("Loading embeddings.")
 if not utility.path_exists(embeddings_file_path) then
   os.execute("mkdir -p " .. memory_path:enquote())
   utility.save_data({
     files = {},
+    sources = {},
     vectors = {},
   }, embeddings_file_path)
 end
 local embeddings = utility.load_data(embeddings_file_path)
+if not embeddings.sources then embeddings.sources = {} end
 if log.debug then
   log("debug", "Embeddings loaded.", embeddings, embeddings.files, embeddings.vectors)
   local file_count = 0
@@ -53,6 +56,7 @@ if log.debug then
   log("debug", vector_count .. " vectors.")
   -- os.exit(1)
 end
+timing.mark("Done loading embeddings.")
 
 
 
@@ -87,7 +91,7 @@ local refresh_file_list = function(source_name, data_source)
   return file_list
 end
 
--- returns nothing when too much text is sent
+-- returns embedding vector OR nothing when too much text is sent
 local generate_embeddings = function(data_source, text)
   local max_chunk_size = data_source.max_chunk_size or config.models.embedding.max_chunk_size
   local model = data_source.embedding_model or config.models.embedding.model
@@ -123,7 +127,7 @@ local make_chunks = function(text, chunk_size)
   return chunks
 end
 
--- returns nothing for empty files and errors
+-- returns chunks, embeddings OR nothing for empty files and errors
 local process_file = function(data_source, file_name)
   local text = utility.read_file(file_name)
 
@@ -181,7 +185,8 @@ local process_file = function(data_source, file_name)
   return chunks, new_embeddings
 end
 
--- returns nothing for errors
+-- returns file_sums OR nothing for errors
+-- saves   embeddings.vectors keyed by sha512sum
 local memorize_file = function(data_source, file_name)
   local file_chunks, file_embeddings = process_file(data_source, file_name)
   if not file_chunks then return end
@@ -213,18 +218,52 @@ local memorize_file = function(data_source, file_name)
   return file_sums
 end
 
+-- deletes embeddings.vectors AND memory files keyed by sha512sum
 local delete_memories = function(sha512sum_list)
   -- if true then return end -- TEMP disabling removal to compare and verify function
-  for i = 1, #sha512sum_list do
-    local sha512sum = sha512sum_list[i]
+  for _, sha512sum in ipairs(sha512sum_list) do
     embeddings.vectors[sha512sum] = nil
     os.execute("rm " .. (memory_path .. utility.path_separator .. sha512sum):enquote())
   end
 end
 
-local refresh_sources = function()
-  os.execute("mkdir -p " .. memory_path:enquote())
+local outdated_sha512sums = {}
+local mark_outdated_memories = function(tab)
+  for _, sha512sum in ipairs(tab) do
+    outdated_sha512sums[#outdated_sha512sums + 1] = sha512sum
+  end
+end
 
+-- deletes embeddings.vectors AND memory files keyed by sha512sum
+local process_outdated_memories = function()
+  timing.mark("Checking for outdated memories to delete.")
+
+  local sha512sum_whitelist = {}
+  for file_name, sha512sum_list in pairs(embeddings.files) do
+    for _, sha512sum in ipairs(sha512sum_list) do
+      sha512sum_whitelist[sha512sum] = true
+    end
+  end
+  for source_name, sha512sum_list in pairs(embeddings.sources) do
+    for _, sha512sum in ipairs(sha512sum_list) do
+      sha512sum_whitelist[sha512sum] = true
+    end
+  end
+
+  for _, sha512sum in ipairs(outdated_sha512sums) do
+    if not sha512sum_whitelist[sha512sum] then
+      log("debug", "Removing outdated memory.", sha512sum)
+      embeddings.vectors[sha512sum] = nil
+      os.execute("rm " .. (memory_path .. utility.path_separator .. sha512sum):enquote())
+    end
+  end
+  outdated_sha512sums = {} -- just in case this ever somehow gets run multiple times
+
+  timing.mark("Done deleting outdated memories.")
+end
+
+-- saves   embeddings.vectors keyed by sha512sum
+local find_orphan_memories = function()
   timing.mark("Checking memory for missing embeddings.")
   utility.list(memory_path, function(file_name)
     log("files", file_name)
@@ -235,10 +274,16 @@ local refresh_sources = function()
     log("sha", "New sum? " .. sha512sum, tostring(embeddings.vectors[sha512sum]))
     if not embeddings.vectors[sha512sum] then
       log("sha", "Saved new sum!")
-      memorize_file({}, file_path)
+      memorize_file({}, file_path) -- WARNING this saves orphans as their own file source
     end
   end)
   timing.mark("Finished checking memory for missing embeddings.")
+end
+
+local refresh_sources = function()
+  os.execute("mkdir -p " .. memory_path:enquote())
+
+  find_orphan_memories()
 
   local sources = utility.load_data("PRIVATE_DATA/sources.json")
   for source_name, data_source in pairs(sources) do
@@ -261,8 +306,8 @@ local refresh_sources = function()
         end
 
         if embeddings.files[file_name] then
-          log("debug", file_name .. "\n Removing old embeddings for modified file.")
-          delete_memories(embeddings.files[file_name])
+          log("debug", file_name .. "\n Marking old embeddings to delete (file was modified).")
+          mark_outdated_memories(embeddings.files[file_name])
           embeddings.files[file_name] = nil
         end
 
@@ -280,10 +325,14 @@ local refresh_sources = function()
     timing.mark("Finished generating embeddings from source \"" .. source_name .. "\"")
   end
 
+  process_outdated_memories()
+
+  timing.mark("Saving embeddings.")
   utility.save_data(embeddings)
   if utility.path_exists(tmp_file_path) then
     os.execute("rm " .. tmp_file_path:enquote())
   end
+  timing.mark("Done saving embeddings.")
 end
 
 refresh_sources()
