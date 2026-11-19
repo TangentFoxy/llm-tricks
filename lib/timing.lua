@@ -33,6 +33,7 @@ timing.display = function(n)
     for i = 2, #timing do
       _display(i)
     end
+    print("Total: ", human_readable_time(timing[#timing].time - timing[1].time))
   end
 end
 
