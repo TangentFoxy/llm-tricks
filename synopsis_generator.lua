@@ -11,18 +11,23 @@ local config = utility.get_config_with_defaults{
   models = {
     synopsis_generator = {
       model = "gemma4:12b-mlx",
-      minimum_bytes = 1000,
+      minimum_bytes = 10000,
       maximum_bytes = 40000,
     },
   },
 }
 
+-- shared usage
 local memory_path = "PRIVATE_DATA" .. utility.path_separator .. "memory"
 local embeddings_file_path = memory_path .. utility.path_separator .. "+embeddings.json"
+
+-- this script only
 local data_path = "PRIVATE_DATA" .. utility.path_separator .. "synopses"
 local data_location = data_path .. utility.path_separator .. "+file_list.json"
+local export_file_path_base = "PRIVATE_DATA" .. utility.path_separator .. "Ordered Synopses"
 
 local refresh_file_list = function()
+  print("Refresing file list...")
   assert(utility.path_exists(embeddings_file_path), "Run \"./refresh_sources.lua\" to set up memory.")
   local embeddings = utility.load_data(embeddings_file_path)
 
@@ -110,8 +115,8 @@ local export_ordered_list_of_prompts = function()
     output[#output + 1] = "## Scoring\n\n```json\n" .. json.encode(item.scoring, { indent = true, }) .. "\n```\n"
   end
 
-  utility.write_file("PRIVATE_DATA/Ordered Synopses.md", table.concat(output, "\n"), "\n")
-  os.execute("pandoc \"PRIVATE_DATA/Ordered Synopses.md\" -o \"PRIVATE_DATA/Ordered Synopses.epub\"")
+  utility.write_file(export_file_path_base .. ".md", table.concat(output, "\n"), "\n")
+  os.execute("pandoc " .. (export_file_path_base .. ".md"):enquote() .. " -o " .. (export_file_path_base .. ".epub"):enquote())
 end
 
 
@@ -123,12 +128,12 @@ if utility.path_exists(data_location) then
   file_list = utility.load_data(data_location)
 end
 
-if arg[1] == "refresh_file_list" then
-  print("Refresing file list...")
-  file_list = refresh_file_list()
-  os.exit(0)
-elseif arg[1] == "export_ordered_list_of_prompts" then
-  export_ordered_list_of_prompts()
+local commands = {
+  refresh = function() file_list = refresh_file_list() end,
+  export = export_ordered_list_of_prompts,
+}
+if commands[arg[1]] then
+  commands[arg[1]]()
   os.exit(0)
 end
 
