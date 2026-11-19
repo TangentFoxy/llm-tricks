@@ -8,7 +8,17 @@ local log = utility.require("log")
 local text_processing = utility.require("text_processing")
 local timing = utility.require("timing")
 
--- TODO there should be a check function for a lock so a warning/error can be dumped?
+log{
+  info = true,
+  warning = true,
+  debug = false,
+  -- files = true, -- debugging why the wrong files are selected
+  -- sha = true,   -- what the fuck is going on with sha sums?
+  todo = true,     -- formerly just notes, but I'll be reminded on every run
+  orphans = true,  -- in the rare case of a memory being orphaned, warn me!
+}
+
+log("todo", "there should be a check function for a lock so a warning/error can be dumped?")
 local config = utility.get_config_with_defaults{
   models = {
     embedding = {
@@ -17,14 +27,6 @@ local config = utility.get_config_with_defaults{
     },
     initialized_sources = {},
   },
-}
-
-log{
-  info = true,
-  warning = true,
-  debug = false,
-  -- files = true, -- debugging why the wrong files are selected
-  -- sha = true, -- what the fuck is going on with sha sums?
 }
 
 local memory_path = "PRIVATE_DATA" .. utility.path_separator .. "memory"
@@ -220,7 +222,6 @@ end
 
 -- deletes embeddings.vectors AND memory files keyed by sha512sum
 local delete_memories = function(sha512sum_list)
-  -- if true then return end -- TEMP disabling removal to compare and verify function
   for _, sha512sum in ipairs(sha512sum_list) do
     embeddings.vectors[sha512sum] = nil
     os.execute("rm " .. (memory_path .. utility.path_separator .. sha512sum):enquote())
@@ -274,7 +275,8 @@ local find_orphan_memories = function()
     log("sha", "New sum? " .. sha512sum, tostring(embeddings.vectors[sha512sum]))
     if not embeddings.vectors[sha512sum] then
       log("sha", "Saved new sum!")
-      memorize_file({}, file_path) -- WARNING this saves orphans as their own file source
+      log("orphans", file_path .. " is being saved as its own file source")
+      memorize_file({}, file_path)
     end
   end)
   timing.mark("Finished checking memory for missing embeddings.")
@@ -339,4 +341,6 @@ refresh_sources()
 timing.mark("Finished.")
 print("")
 timing.display()
+log("todo")
+log("orphans")
 log("warning")
