@@ -8,6 +8,15 @@ accidentally committed.
 Opens `embeddings.json` and creates `similarities.json` with a sorted list of
 comparisons.
 
+### `ebook_text_extraction.lua`
+The idea was to use this as refresh command with ebooks to put their contents
+into memory. Considering how vastly polluted it makes the space, I'm not using
+it. (It also makes plagiarism accidentally really easy since your private data
+is no longer *your* data.)
+
+If I ever decide to use it again, it should use config loading with defaults
+instead of the temporary hardcoded calibre location it has now.
+
 ### `generate_embeddings.lua`
 Opens every file on its whitelist within the `notebook` directory, and generates
 embeddings (placed in `embeddings.json`). When files are too long, it truncates
