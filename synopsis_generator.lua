@@ -36,13 +36,19 @@ local refresh_file_list = function()
 
   local file_list = {}
   for file_name, sha512sum_list in pairs(embeddings.files) do
-    local file_size = utility.file_size(file_name)
-    if file_size >= minimum_bytes and file_size <= maximum_bytes then
-      local text = text_processing.strip_frontmatter(utility.read_file(file_name))
-      if #text >= minimum_bytes and #text <= maximum_bytes then
-        file_list[#file_list + 1] = { file_name = file_name, }
+    local _loop = function()
+      if not utility.path_exists(file_name) then
+        return
+      end
+      local file_size = utility.file_size(file_name)
+      if file_size >= minimum_bytes and file_size <= maximum_bytes then
+        local text = text_processing.strip_frontmatter(utility.read_file(file_name))
+        if #text >= minimum_bytes and #text <= maximum_bytes then
+          file_list[#file_list + 1] = { file_name = file_name, }
+        end
       end
     end
+    _loop()
   end
 
   utility.save_data(file_list, data_location)
@@ -130,16 +136,19 @@ end
 
 local commands = {
   refresh = function() file_list = refresh_file_list() end,
-  export = export_ordered_list_of_prompts,
+  export = function() export_ordered_list_of_prompts() os.exit(0) end,
 }
 if commands[arg[1]] then
   commands[arg[1]]()
-  os.exit(0)
 end
 
-assert(file_list and (#file_list > 0), "Run \"./synopsis_generator.lua refresh_file_list\" first.")
+assert(file_list and (#file_list > 0), "Run " .. ("./synopsis_generator.lua refresh"):enquote() .. " first.")
 
 print(#file_list .. " files to select from.")
+
+print("  Reminder, create an exportable epub by running " .. ("./synopsis_generator.lua export"):enquote() .. ".")
+print("  This will overwrite an old one if it exists in the default location!")
+
 while true do
   local file_name = file_list[math.random(1, #file_list)].file_name
   local text = utility.read_file(file_name)

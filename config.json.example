@@ -4,6 +4,11 @@
       "model":"qwen3-embedding:0.6b",
       "max_chunk_size":32768
     },
+    "synopsis_generator":{
+      "minimum_bytes":10000,
+      "maximum_bytes":40000,
+      "model":"gemma4:12b-mlx"
+    },
     "initialized_sources":{}
   }
 }
